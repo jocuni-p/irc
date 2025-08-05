@@ -67,6 +67,65 @@ int main() {
 
 
 	// MANTIENE EL SERVER EN MARCHA ESCUCHANDO (AUNQUE SE CIERRE UN CLIENTE)
+===========================================
+	
+	while (true) {
+		int activity = poll(fds.data(), fds.size(), -1); // -1 = espera indefinida
+
+		if (activity < 0) {
+			std::cerr << "Error en poll()." << std::endl;
+			break;
+		}
+
+		for (size_t i = 0; i < fds.size(); ++i) {
+			if (fds[i].revents & POLLIN) {
+				if (fds[i].fd == server_fd) {
+					// Nueva conexión
+					struct sockaddr_in client_addr;
+					socklen_t client_len = sizeof(client_addr);
+					int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+					if (client_fd == -1) {
+						std::cerr << "Error en accept()." << std::endl;
+						continue;
+					}
+					std::cout << "Cliente conectado desde "
+							<< inet_ntoa(client_addr.sin_addr) << ":"
+							<< ntohs(client_addr.sin_port) << std::endl;
+
+					// Añadir nuevo cliente al vector de fds
+					struct pollfd client_pollfd;
+					client_pollfd.fd = client_fd;
+					client_pollfd.events = POLLIN;
+					fds.push_back(client_pollfd);
+				} else {
+					// Mensaje de un cliente existente
+					char buffer[MAX_BUFFER];
+					std::memset(buffer, 0, MAX_BUFFER);
+					int bytes = recv(fds[i].fd, buffer, MAX_BUFFER - 1, 0);
+					if (bytes <= 0) {
+						std::cout << "Cliente desconectado (socket " << fds[i].fd << ")" << std::endl;
+						close(fds[i].fd);
+						fds.erase(fds.begin() + i);
+						--i; // ajustar índice tras eliminar
+					} else {
+						std::cout << "Mensaje (" << fds[i].fd << "): " << buffer;
+						const char* respuesta = "Servidor: mensaje recibido\n";
+						send(fds[i].fd, respuesta, std::strlen(respuesta), 0);
+					}
+				}
+			}
+		}
+	}
+
+
+
+
+
+
+
+
+
+	===================================
 	while (true) {
         std::cout << "Esperando conexión...\n" << std::endl;
 
