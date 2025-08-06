@@ -14,10 +14,10 @@
 
 int main() {
     std::cout << "============================================" << std::endl;
-    std::cout << "Servidor TCP IRC - MODO SIMPLE RECONECTABLE" << std::endl;
+    std::cout << "Servidor TCP IRC - MULTIPLES CLIENTES" << std::endl;
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << " Este programa inicia un servidor TCP en " << std::endl;
-    std::cout << " el puerto 6667 y acepta 1 conexión     " << std::endl;
+    std::cout << " el puerto 6667 y acepta multiples conexiones" << std::endl;
     std::cout << " de cliente (por ejemplo, usando netcat). " << std::endl;
     std::cout << "--------------------------------------------" << std::endl;
     std::cout << " Para probarlo desde otra terminal:       " << std::endl;
@@ -38,49 +38,62 @@ int main() {
     server_addr.sin_port = htons(PORT); // puerto de entrada (donde escucha)
     server_addr.sin_addr.s_addr = INADDR_ANY; //rango de IPs que escuchara (ANY: todas)
 
-	// Config para dejar libre el puerto rapidamente despues de usarlo y que lo pueda usar otro proceso
+	// Config para LIBERAR PUERTO RAPIDAMENTE despues de usarlo y que lo pueda usar otro proceso
 	int opt = 1;
 	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt));
 
-	// ENLAZA el socket(fd) a la struct(IP:puerto)
+	// ENLAZA el socket(fd) a la struct(IP, PORT, ...)
     if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
         std::cerr << "Error en bind()." << std::endl;
         close(server_fd);
         return 1;
     }
 
-	// ESCUCHA conexiones entrantes (admitira hasta 5 en cola)
+	// ESCUCHA conexiones entrantes (fd, los que admite en cola)
     if (listen(server_fd, 5) == -1) {
         std::cerr << "Error en listen()." << std::endl;
         close(server_fd);
         return 1;
     }
 
-	// Declaro un vector (de structs pollfd) que lo usara poll() para gestionar lo que pasa en todos los sockets
+	// VECTOR DE FDS (structs pollfd): lo usara poll() para gestionar todo lo que pase en los sockets
 	std::vector<struct pollfd> fds;
 
-	//anyado el servidor con sus datos al vector
+	// Declaro una struct para el server y seteo sus parametros
+	// ANYADO EL SERVER AL VECTOR, sera el primero [0] en el vector
 	struct pollfd server_pollfd; //declaro una struct con nombre del server
 	server_pollfd.fd = server_fd; // le digo el fd del server
 	server_pollfd.events = POLLIN; // le digo que eventos ha de escuchar
-	fds.push_back(server_pollfd); // anyado la struct al final del vector
+	fds.push_back(server_pollfd); // anyado la struct al final del vector (que es el [0], porque es el primero)
 
 
-	// MANTIENE EL SERVER EN MARCHA ESCUCHANDO (AUNQUE SE CIERRE UN CLIENTE)
-===========================================
-	
+	/** SERVER ESCUCHANDO INDEFINIDAMENTE pero poll() lo mantiene en espera, "dormido", 
+	 * sin consumir CPU, si no hay actividad. Si hay actividad "lo despierta", maneja 
+	 * el evento rapidamente y vuelve a ponerlo en espera.
+	 */
 	while (true) {
-		int activity = poll(fds.data(), fds.size(), -1); // -1 = espera indefinida
 
+		std::cout << "Esperando actividad...\n" << std::endl;
+
+		// LLamo a poll(vector de fds) para ver si ha detectado actividad (en el POLLIN de algun fd).
+		// Si la actividad esta en el server_fd: es un cliente intentando conectarse.
+		// Si la actividad esta en un client_fd: es un cliente conectado enviando un mensaje o desconectandose
+		// El .data convierte el vector en un array tipo C, como poll() lo necesita
+		// -1 = espera indefinidamente hasta que haya actividad
+		// activity nos dira en cuantos sockets hay actividad pendiente 
+		int activity = poll(fds.data(), fds.size(), -1);
+
+		// si falla salimos del bucle y se cierra el programa (OJO: puede que haya que limpiar memorias)
 		if (activity < 0) {
 			std::cerr << "Error en poll()." << std::endl;
 			break;
 		}
 
+		//Recorre todos los elementos del vector para ver quien es el que ha tenido actividad
 		for (size_t i = 0; i < fds.size(); ++i) {
-			if (fds[i].revents & POLLIN) {
-				if (fds[i].fd == server_fd) {
-					// Nueva conexión
+			if (fds[i].revents & POLLIN) { // Si hubo un evento de POLLIN en este socket
+				if (fds[i].fd == server_fd) { // Si el socket es el del server
+					// Creamos un socket para el nuevo cliente (sockaddr_in, accept(), pollfd())
 					struct sockaddr_in client_addr;
 					socklen_t client_len = sizeof(client_addr);
 					int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
@@ -88,16 +101,18 @@ int main() {
 						std::cerr << "Error en accept()." << std::endl;
 						continue;
 					}
-					std::cout << "Cliente conectado desde "
+					std::cout << "Nuevo Cliente en socket " 
+							<< client_fd << " (desde "
 							<< inet_ntoa(client_addr.sin_addr) << ":"
-							<< ntohs(client_addr.sin_port) << std::endl;
+							<< ntohs(client_addr.sin_port) 
+							<< ")" << std::endl;
 
 					// Añadir nuevo cliente al vector de fds
 					struct pollfd client_pollfd;
 					client_pollfd.fd = client_fd;
 					client_pollfd.events = POLLIN;
 					fds.push_back(client_pollfd);
-				} else {
+				} else { // Si la actividad se ha dado en un socket de cliente
 					// Mensaje de un cliente existente
 					char buffer[MAX_BUFFER];
 					std::memset(buffer, 0, MAX_BUFFER);
@@ -108,7 +123,7 @@ int main() {
 						fds.erase(fds.begin() + i);
 						--i; // ajustar índice tras eliminar
 					} else {
-						std::cout << "Mensaje (" << fds[i].fd << "): " << buffer;
+						std::cout << "Mensaje del socket (" << fds[i].fd << "): " << buffer;
 						const char* respuesta = "Servidor: mensaje recibido\n";
 						send(fds[i].fd, respuesta, std::strlen(respuesta), 0);
 					}
@@ -117,72 +132,14 @@ int main() {
 		}
 	}
 
-
-
-
-
-
-
-
-
-	===================================
-	while (true) {
-        std::cout << "Esperando conexión...\n" << std::endl;
-
-		// ACEPTA UNA CONEXION y devuelve su nuevo socket con su struct (IP y port)
-        struct sockaddr_in client_addr;
-        socklen_t client_len = sizeof(client_addr);
-        int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
-        if (client_fd == -1) {
-            std::cerr << "Error en accept()." << std::endl;
-            continue; // Si hay error no se cierra y sigue en escucha
-        }
-
-		//DEBUGG INFO SOBRE EL CLIENTE ACEPTADO (LOCAL)-------------------
-		std::cout << "--------------------------" << std::endl;
-		std::cout << "Socket asignado al cliente: " << client_fd << std::endl;
-		std::cout << "Cliente conectado desde "
-                  << inet_ntoa(client_addr.sin_addr) << ":"
-                  << ntohs(client_addr.sin_port) << std::endl;
-
-		struct sockaddr_in local_addr;
-		socklen_t local_len = sizeof(local_addr);
-		//obtiene la direccion local asociada al cliente y la guarda en local_addr
-		// no es obligatorio, pero es util para mostrar info del lado del servidor (en que IP y puerto ha aceptado la conexion)
-		if (getsockname(client_fd, (struct sockaddr*)&local_addr, &local_len) == -1) {
-			std::cerr << "Error al obtener dirección local." << std::endl;
-		} else {
-			//muestra por consola desde que IP y puerto local se ha aceptado la conexion con cliente
-			std::cout << "Servidor conectado desde "
-					<< inet_ntoa(local_addr.sin_addr)
-					<< ":" << ntohs(local_addr.sin_port) << std::endl;
-			std::cout << "-----------------------" << std::endl;
-		}
-		//-------------------------------------------------------------
-
-
-		// GESTION BASICA DE MENSAJES
-        char buffer[MAX_BUFFER];
-        while (true) {
-            std::memset(buffer, 0, MAX_BUFFER);
-            int bytes = recv(client_fd, buffer, MAX_BUFFER - 1, 0);
-            if (bytes == 0) {
-                std::cout << "Cliente desconectado..." << std::endl;
-                close(client_fd);
-                break;
-				
-            } else if (bytes < 0) {
-                std::cout << "Error al recibir datos." << std::endl;
-                break;
-                
-            } else {
-            std::cout << "Mensaje recibido: " << buffer;
-            const char* respuesta = "Servidor: mensaje recibido\n";
-            send(client_fd, respuesta, std::strlen(respuesta), 0);
-            }
-        }
-    }
-
     close(server_fd); // Teoricamente nunca se alcanzará este punto
     return 0;
 }
+
+/**PROXIMO PASO: HACERLO UN SERVIDOR IRC FUNCIONAL Y QUE ACEPTE EL PROTOCOLO
+ *  IRC PARA EL CLIENTE HEXCHAT. QUE RETORNE LAS RESPUESTAS ESPECIFICAS QUE 
+ * ESPERA HEXCHAT PARA CONECTARSE Y QUE PUEDA GESTIONAR LOS COMANDOS PROTOCOLIZADOS DE 
+ * COMUNICACION IRC.
+ * HACER UN MAKEFILE.
+ * QUE RECIBA LOS PARAMETROS AL EJECUTAR: ./ircserv <port> <password>
+*/
