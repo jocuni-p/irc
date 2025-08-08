@@ -31,7 +31,7 @@ int main() {
         return 1;
     }
 
-	// CONFIGURA STRUCT PARA EL SOCKET (con los params que quiero para el server)
+	// CONFIGURA STRUCT PARA EL SOCKET (asigna IP y PORT)
     struct sockaddr_in server_addr;
     std::memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET; // tipo de domain/IP (ipv4, ipv6, ...)
@@ -42,7 +42,7 @@ int main() {
 	int opt = 1;
 	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt));
 
-	// ENLAZA el socket(fd) a la struct(IP, PORT, ...)
+	// ENLAZA el socket(fd) recien creado a la struct(IP, PORT, ...)
     if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
         std::cerr << "Error en bind()." << std::endl;
         close(server_fd);
@@ -78,22 +78,24 @@ int main() {
 		// LLamo a poll(vector de fds) para ver si ha detectado actividad (en el POLLIN de algun fd).
 		// Si la actividad esta en el server_fd: es un cliente intentando conectarse.
 		// Si la actividad esta en un client_fd: es un cliente conectado enviando un mensaje o desconectandose
-		// El .data convierte el vector en un array tipo C, como poll() lo necesita
-		// -1 = espera indefinidamente hasta que haya actividad
+		// El .data convierte el vector en un array tipo C, tal y como poll() lo necesita
+		// timeout = -1 -> espera indefinidamente hasta que haya actividad. Aqui nuestro poll() es bloqueante,
+		// para ahorrar recursos, aunque nuestros sockets seran no bloqueantes, como pide el subject.
+		// Retorno de poll(). >0: num de fds con eventos, 0: timeout (sin eventos), -1: error
 		// activity nos dira en cuantos sockets hay actividad pendiente 
 		int activity = poll(fds.data(), fds.size(), -1);
 
-		// si falla salimos del bucle y se cierra el programa (OJO: puede que haya que limpiar memorias)
+		// si poll() retorna (-1) fallo, salimos del bucle y se cierra el programa (OJO: puede que haya que limpiar memorias o buffers)
 		if (activity < 0) {
 			std::cerr << "Error en poll()." << std::endl;
 			break;
 		}
 
-		//Recorre todos los elementos del vector para ver quien es el que ha tenido actividad
+		//Recorre TODOS los elementos del vector para ver quien es el que ha tenido actividad
 		for (size_t i = 0; i < fds.size(); ++i) {
-			if (fds[i].revents & POLLIN) { // Si hubo un evento de POLLIN en este socket
+			if (fds[i].revents & POLLIN) { // Si hubo un evento de POLLIN en este socket (bitwise AND)
 				if (fds[i].fd == server_fd) { // Si el socket es el del server
-					// Creamos un socket para el nuevo cliente (sockaddr_in, accept(), pollfd())
+					// Creamos un socket para el nuevo cliente (sockaddr_in, accept())
 					struct sockaddr_in client_addr;
 					socklen_t client_len = sizeof(client_addr);
 					int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
@@ -107,22 +109,33 @@ int main() {
 							<< ntohs(client_addr.sin_port) 
 							<< ")" << std::endl;
 
-					// Añadir nuevo cliente al vector de fds
+					// Añadimos el nuevo cliente al vector<pollfd> fds
 					struct pollfd client_pollfd;
 					client_pollfd.fd = client_fd;
 					client_pollfd.events = POLLIN;
 					fds.push_back(client_pollfd);
-				} else { // Si la actividad se ha dado en un socket de cliente
-					// Mensaje de un cliente existente
+				} else { // Si la actividad se ha dado en el socket de un cliente
+					// Preparo un buffer para alojar el mensaje y lo recibo
 					char buffer[MAX_BUFFER];
 					std::memset(buffer, 0, MAX_BUFFER);
-					int bytes = recv(fds[i].fd, buffer, MAX_BUFFER - 1, 0);
-					if (bytes <= 0) {
-						std::cout << "Cliente desconectado (socket " << fds[i].fd << ")" << std::endl;
+					int bytes = recv(fds[i].fd, buffer, MAX_BUFFER - 1, 0); // El -1 es para el \0 de cierre del string. El 0 es un flag.
+					// Si el mensaje es 0
+					if (bytes == 0) {
+						std::cout << "Cliente ha cerrado la conexion (socket " << fds[i].fd << ")" << std::endl;
 						close(fds[i].fd);
 						fds.erase(fds.begin() + i);
 						--i; // ajustar índice tras eliminar
-					} else {
+					// Si el mensaje es un error
+					} else if (bytes < 0) {
+						std::cout << "Error en la lectura del cliente (socket " << fds[i].fd << ")" << std::endl;
+						close(fds[i].fd);
+						fds.erase(fds.begin() + i);
+						--i;
+						std::cout << "He cerrado y borrado el socket" << std::endl;
+					}
+					// Si el mensaje es valido: lo muestro por consola y envio un acuse de recibo al cliente
+					else
+					{
 						std::cout << "Mensaje del socket (" << fds[i].fd << "): " << buffer;
 						const char* respuesta = "Servidor: mensaje recibido\n";
 						send(fds[i].fd, respuesta, std::strlen(respuesta), 0);
@@ -142,4 +155,5 @@ int main() {
  * COMUNICACION IRC.
  * HACER UN MAKEFILE.
  * QUE RECIBA LOS PARAMETROS AL EJECUTAR: ./ircserv <port> <password>
+ * ATENCION: USAR LAS EXCEPCIONES PARA LA GESTION DE ERRORES, try_catch en el main.
 */
