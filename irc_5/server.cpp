@@ -37,8 +37,8 @@ int main() {
     std::cout << "==========================================" << std::endl << std::endl;
 
     // CREA UN SOCKET
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0); // (tipo de dominio ipv4, tipo de socket:TCP)
-    if (server_fd == -1) {
+	int server_fd = socket(AF_INET, SOCK_STREAM, 0); // (familia de protocolo de dominio ipv4, tipo de socket paraTCP, protocolo (si 0, el sistema lo elige))
+	if (server_fd == -1) {
         std::cerr << "Error al crear el socket." << std::endl;
         return 1;
     }
@@ -61,14 +61,17 @@ int main() {
         return 1;
     }
 
-    // ENLAZA el socket(fd) recien creado a la struct(IP, PORT, ...)
+    // ENLAZA el socket(fd) recien creado a la struct de datos(IP, PORT, ...)
+	// Necesita el tamanyo(len en bytes) de la struct para saber a que familia de protocolo 
+	// pertenece (ipv4, ipv6,..) y asi el kernel solo copia los bytes necesarios 
+	// y no sale de ese espacio de la memoria asignada
     if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
         std::cerr << "Error en bind()." << std::endl;
         close(server_fd);
         return 1;
     }
 
-    // ESCUCHA conexiones entrantes (fd, los que admite en cola)
+    // PONE EN ESCUCHA EL PUERTO del socket del server a conexiones entrantes (fd, num conexiones que admite en cola esperando)
     if (listen(server_fd, 5) == -1) {
         std::cerr << "Error en listen()." << std::endl;
         close(server_fd);
@@ -102,7 +105,8 @@ int main() {
         // timeout = -1 -> espera indefinidamente hasta que haya actividad. Aquí nuestro poll() es bloqueante,
         // para ahorrar recursos, aunque nuestros sockets serán no bloqueantes, como pide el subject.
         // Retorno de poll(). >0: num de fds con eventos, 0: timeout (sin eventos), -1: error
-        int activity = poll(fds.data(), fds.size(), -1);
+		// DORMIDO AQUI HASTA QUE HAYA ALGUNA ACTIVIDAD
+		int activity = poll(fds.data(), fds.size(), -1);
 
         // si poll() retorna fallo (-1), salimos del bucle y se cierra el programa (OJO: puede que haya que limpiar memorias o buffers)
         if (activity < 0) {
