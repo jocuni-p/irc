@@ -14,8 +14,8 @@
 #define PORT 6667
 #define MAX_BUFFER 512 // Establecido como max bytes en el protocolo IRC
 
-// Pequeña función utilitaria para poner un fd en non-blocking
-// El subject pide explícitamente: fcntl(fd, F_SETFL, O_NONBLOCK);
+// Pequeña función utilitaria para poner un fd en non-blocking mode
+// El subject nos limita explícitamente a: fcntl(fd, F_SETFL, O_NONBLOCK);
 void setNonBlockingOrExit(int fd) {
     if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
         perror("fcntl(F_SETFL, O_NONBLOCK)");
@@ -25,16 +25,14 @@ void setNonBlockingOrExit(int fd) {
 }
 
 int main() {
-    std::cout << "==========================================" << std::endl;
-    std::cout << "Servidor TCP IRC - MULTIPLES CLIENTES     " << std::endl;
-    std::cout << "------------------------------------------" << std::endl;
-    std::cout << " Este programa inicia un servidor TCP en  " << std::endl;
-    std::cout << " puerto 6667 y acepta multiples conexiones" << std::endl;
-    std::cout << " de cliente (por ejemplo, usando netcat). " << std::endl;
-    std::cout << "------------------------------------------" << std::endl;
-    std::cout << " Para probarlo desde otra terminal:       " << std::endl;
-    std::cout << "     nc localhost 6667                    " << std::endl;
-    std::cout << "==========================================" << std::endl << std::endl;
+    std::cout << "====================================" << std::endl;
+    std::cout << "       Servidor TCP IRC - V5        " << std::endl;
+    std::cout << "------------------------------------" << std::endl;
+    std::cout << "         MULTIPLES CLIENTES         " << std::endl;
+    std::cout << "------------------------------------" << std::endl;
+    std::cout << " Para probarlo desde otra terminal: " << std::endl;
+    std::cout << "     nc localhost 6667              " << std::endl;
+    std::cout << "====================================" << std::endl << std::endl;
 
     // CREA UN SOCKET
 	int server_fd = socket(AF_INET, SOCK_STREAM, 0); // (familia de protocolo de dominio ipv4, tipo de socket paraTCP, protocolo (si 0, el sistema lo elige))
@@ -178,3 +176,12 @@ int main() {
     close(server_fd); // Solo se alcanzará este punto si falla poll()
     return 0;
 }
+
+/**PROXIMO PASO: HACERLO UN SERVIDOR IRC FUNCIONAL Y QUE ACEPTE EL PROTOCOLO
+ *  IRC PARA EL CLIENTE HEXCHAT. QUE RETORNE LAS RESPUESTAS ESPECIFICAS QUE 
+ * ESPERA HEXCHAT PARA CONECTARSE Y QUE PUEDA GESTIONAR LOS COMANDOS PROTOCOLIZADOS DE 
+ * COMUNICACION IRC.
+ * HACER UN MAKEFILE.
+ * QUE RECIBA LOS PARAMETROS AL EJECUTAR: ./ircserv <port> <password>
+ * ATENCION: USAR LAS EXCEPCIONES PARA LA GESTION DE ERRORES, try_catch en el main.
+*/
