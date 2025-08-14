@@ -83,8 +83,8 @@ int main() {
     // AÑADO EL SERVER AL VECTOR, será el primero [0] en el vector
     struct pollfd server_pollfd;
     server_pollfd.fd = server_fd;
-    server_pollfd.events = POLLIN;
-    server_pollfd.revents = 0;
+    server_pollfd.events = POLLIN; // le digo que eventos ha de escuchar
+    server_pollfd.revents = 0; // inicializo lista de eventos vividos 
     fds.push_back(server_pollfd); // añado la struct al final del vector (que es el [0], porque es el primero)
 
 
