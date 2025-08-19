@@ -10,11 +10,11 @@
 #include <poll.h>
 #include <netinet/in.h>
 #include "Client.hpp"
-// #include "Channel.hpp"
+#include "Channel.hpp" 
 
 class Server {
 private:
-    const int _port; // no sera modificable
+    int _port;
     const std::string _password; // no sera modificable
     int _server_fd;
     std::vector<struct pollfd> _fds;

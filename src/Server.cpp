@@ -6,15 +6,18 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <cstdio> // perror
 #include <cerrno>
 
+// Metodo statico fuera de la clase
 static void setNonBlockingOrExit(int fd) {
     if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
-        perror("fcntl");
+        perror("fcntl"); // OJO: revisar si lo dejo asi o mejor un throw ?????
         close(fd);
-        exit(1);
+        exit(1); // No tengo claro si salir asi o con EXIT_FAILURE, cerrar todo limpiamente (fds)
     }
 }
+
 
 Server::Server(int port, const std::string& password)
 : _port(port), _password(password), _server_fd(-1) { // server_fd -1 por seguridad y robustez
@@ -29,13 +32,13 @@ Server::~Server() {
 void Server::initSocket() {
     _server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (_server_fd == -1) {
-        throw std::runtime_error("Error creando socket");
+        throw std::runtime_error("Error at socket creation"); // Gestionar salida limpia del prog
     }
     setNonBlockingOrExit(_server_fd);
 
     int opt = 1;
     if (setsockopt(_server_fd, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt)) == -1) {
-        throw std::runtime_error("Error en setsockopt");
+        throw std::runtime_error("Error on setsockopt");
     }
 
     std::memset(&_server_addr, 0, sizeof(_server_addr));
@@ -44,20 +47,20 @@ void Server::initSocket() {
     _server_addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(_server_fd, (struct sockaddr*)&_server_addr, sizeof(_server_addr)) == -1) {
-        throw std::runtime_error("Error en bind");
+        throw std::runtime_error("Error on bind");
     }
 
     if (listen(_server_fd, 5) == -1) {
-        throw std::runtime_error("Error en listen");
+        throw std::runtime_error("Error on listen");
     }
 
     struct pollfd server_pollfd;
     server_pollfd.fd = _server_fd;
     server_pollfd.events = POLLIN;
     server_pollfd.revents = 0;
-    _fds.push_back(server_pollfd);
+    _fds.push_back(server_pollfd); // Anyade la struct del server al vector de pollfds
 
-    std::cout << "Servidor iniciado en puerto " << _port << std::endl;
+    std::cout << "Server ready on port " << _port << std::endl;
 }
 
 void Server::handleNewConnection() {
