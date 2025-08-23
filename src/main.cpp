@@ -23,6 +23,9 @@ int main(int argc, char **argv) {
 			throw(std::runtime_error("Error: Password must contain only printable ASCII chars (no spaces) and max 20 chars"));
 		}
 
+		Server irc(port, pass);
+		irc.run();
+
 	} catch (const std::exception &e) {
 		std::cerr << "Error: " << e.what() << std::endl;
 		return 1; // No estoy seguro de este numero de error

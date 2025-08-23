@@ -9,14 +9,14 @@
 #include <stdexcept>
 #include <poll.h>
 #include <netinet/in.h>
-//#include "Client.hpp"
+#include "Client.hpp"
 #include "Channel.hpp"
 
-class Client; // Incluyo la clase aqui o arriba?????
+//class Client; // Incluyo la clase aqui o arriba?????
 
 class Server {
 private:
-    const int _port; // no modificable
+    const int _port; // no modificable ?????
     const std::string _password; // no sera modificable
     int _server_fd; // no modificable
     std::vector<struct pollfd> _fds;
