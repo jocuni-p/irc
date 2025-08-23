@@ -1,0 +1,21 @@
+# Ejecutable principal
+/ircserv
+
+# Archivos objeto
+*.o
+
+# Archivos de dependencias
+*.d
+
+# macOS
+.DS_Store
+
+# Linux/Unix
+*~
+
+# Archivos temporales
+*.swp
+*.swo
+
+# Archivos Visual Studio Code
+.vscode
