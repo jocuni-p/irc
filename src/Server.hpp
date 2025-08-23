@@ -9,8 +9,10 @@
 #include <stdexcept>
 #include <poll.h>
 #include <netinet/in.h>
-#include "Client.hpp"
-#include "Channel.hpp" 
+//#include "Client.hpp"
+#include "Channel.hpp"
+
+class Client; // Incluyo la clase aqui o arriba?????
 
 class Server {
 private:
@@ -20,7 +22,7 @@ private:
     std::vector<struct pollfd> _fds;
     std::map<int, Client> _clients;       // fd -> Client
     std::map<std::string, Channel> _channels; // nombre -> Channel
-    struct sockaddr_in _server_addr;
+    struct sockaddr_in _server_addr; //struct del sistema, contiene IP y puerto del socket
 
 
     void initSocket();
