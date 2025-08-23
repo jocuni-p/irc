@@ -19,7 +19,7 @@ static void setNonBlockingOrExit(int fd) {
 }
 
 
-Server::Server(int port, const std::string& password)
+Server::Server(const int port, const std::string& password)
 : _port(port), _password(password), _server_fd(-1) { // server_fd -1 por seguridad y robustez
     initSocket();
 }

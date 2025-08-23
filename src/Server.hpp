@@ -14,9 +14,9 @@
 
 class Server {
 private:
-    int _port;
+    const int _port; // no modificable
     const std::string _password; // no sera modificable
-    int _server_fd;
+    int _server_fd; // no modificable
     std::vector<struct pollfd> _fds;
     std::map<int, Client> _clients;       // fd -> Client
     std::map<std::string, Channel> _channels; // nombre -> Channel
@@ -32,6 +32,8 @@ public:
     ~Server();
 
     void run();
+
+	static bool isValidPasswordArg(const std::string &pass);
 };
 
 #endif
