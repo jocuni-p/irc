@@ -9,7 +9,7 @@
 #include <cstdio> // perror
 #include <cerrno>
 
-// METODO STATIC fuera de la clase
+// METODO STATIC fuera de la clase (no tengo claro si ponerlo aqui suelto)???????
 static void setNonBlockingOrExit(int fd) {
     if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
         perror("fcntl"); // OJO: revisar si lo dejo asi o mejor un throw ?????

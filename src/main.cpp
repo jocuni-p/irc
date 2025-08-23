@@ -8,7 +8,10 @@ int main(int argc, char **argv) {
 	int port;
 	std::string pass;
 
+	std::cout << "Proces ID: " << getpid() << std::endl;//
+
 	try {
+		//VALIDACIONES
 		if (argc != 3) {
 			throw(std::runtime_error("Error: Invalid argument number.\nUsage ./ircserv <port> <password>"));
 		}
@@ -22,13 +25,16 @@ int main(int argc, char **argv) {
 		if (!Server::isValidPasswordArg(pass)) {
 			throw(std::runtime_error("Error: Password must contain only printable ASCII chars (no spaces) and max 20 chars"));
 		}
-
+		//CREACION Y EJECUCION DEL SERVIDOR
 		Server irc(port, pass);
-		irc.run();
+		irc.run(); // bucle infinito
 
-	} catch (const std::exception &e) {
-		std::cerr << "Error: " << e.what() << std::endl;
-		return 1; // No estoy seguro de este numero de error
+		std::cout << "Server terminated" << std::endl;
+		return 0; // aunque nunca llegara aqui, lo ponemos por completar el flujo y claridad
 	}
-	return 0;
+	catch (const std::exception &e)
+	{
+		std::cerr << "Error: " << e.what() << std::endl;
+		return 1;
+	}
 }

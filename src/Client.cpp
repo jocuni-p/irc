@@ -21,5 +21,5 @@ void Client::appendBuffer(const std::string &data) {
 }
 
 std::string Client::extractMessage() {
-	//obtiene la linea de ???
+	//obtiene la linea de _buffer
 }
