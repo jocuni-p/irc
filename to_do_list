@@ -1,0 +1,47 @@
+TAREAS:
+
+-Tendremos una clase general "Server" de la que dependeran la clases "Client" y "Channel".
+
+
+
+
+
+
+
+
+FILE SERVER:
+
+-Su destructor deberia eliminar los containers de "Client" y 'Channel" que se hayan creado. Ojo a la memoria dinamica.
+
+-Implementar los comandos de AUTENTICACION (PASS, NICH, USER) en su orden.
+	Ayudara tener un status del proceso de autentificacion, que se podria hacer con un enum de estados 
+		enum AuthStatus 
+		NOT_REGISTERED,
+		PASS_OK,
+		NICK_OK,
+		USER_OK,
+		REGISTERED
+
+-Gestionar la SALIDA LIMPIA DEL PROGRAMA (Shutdown graceful): SIGINT(Ctrl+C), SIGTERM(kill <pid>)
+	La forma mas facil y sencilla es usar un flag atomico global booleano puesto inicialmente en true.
+	
+	#include <atomic>
+	std::atomic<bool> g_running(true);
+
+	void signalHandler(int) {
+		g_running = false; // solo esto
+	}
+
+	En el bucle principal de Server::run() se va revisando el flag:
+	void Server::run() {
+		while (g_running) {
+			int ret = poll(...);
+			if (ret > 0) {
+				// manejar sockets
+			}
+		}
+    	shutdown(); // aquí ya es seguro cerrar todo
+	}
+
+
+

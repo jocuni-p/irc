@@ -116,7 +116,7 @@ void Server::handleClientMessage(size_t i) {
 
 // ESCUCHA PERMANENTE DE ACTIVIDAD CON poll()
 void Server::run() {
-    while (true) {
+    while (true) { // para manejar las senyales podemos poner com arg del bucle el flag atomico global
         int activity = poll(&_fds[0], _fds.size(), -1); // timeout: -1 = espera indefinida (bloqueante)
         if (activity < 0) throw std::runtime_error("Error en poll");
 

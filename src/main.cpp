@@ -29,8 +29,8 @@ int main(int argc, char **argv) {
 		Server irc(port, pass);
 		irc.run(); // bucle infinito
 
-		std::cout << "Server terminated" << std::endl;
-		return 0; // aunque nunca llegara aqui, lo ponemos por completar el flujo y claridad
+		std::cout << "Server shutdown gracefully" << std::endl;
+		return 0; //Deberia salir por aqui si se hace un Ctrl+C y se maneja adecuadamente la senyal
 	}
 	catch (const std::exception &e)
 	{
