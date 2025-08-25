@@ -23,25 +23,14 @@ FILE SERVER:
 		REGISTERED
 
 -Gestionar la SALIDA LIMPIA DEL PROGRAMA (Shutdown graceful): SIGINT(Ctrl+C), SIGTERM(kill <pid>)
-	La forma mas facil y sencilla es usar un flag atomico global booleano puesto inicialmente en true.
-	
-	#include <atomic>
-	std::atomic<bool> g_running(true);
+	-Implementar el manejo de las senyales con un signalhandler()  
+	C++98 solo garantiza que puedes modificar de forma segura variables de tipo volatile sig_atomic_t dentro de un handler.
+	 En el handler llamar a un método Server::stop() o Server::shutdown() que:
+		Cierre el socket de escucha.
+		Cierre los sockets de todos los clientes conectados.
+		Limpie estructuras (vectores, buffers, etc).
+		Luego hacer exit(0) o dejar que main() termine.
 
-	void signalHandler(int) {
-		g_running = false; // solo esto
-	}
-
-	En el bucle principal de Server::run() se va revisando el flag:
-	void Server::run() {
-		while (g_running) {
-			int ret = poll(...);
-			if (ret > 0) {
-				// manejar sockets
-			}
-		}
-    	shutdown(); // aquí ya es seguro cerrar todo
-	}
-
+-
 
 

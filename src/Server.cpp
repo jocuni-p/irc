@@ -9,32 +9,32 @@
 #include <cstdio> // perror
 #include <cerrno>
 
-// METODO STATIC fuera de la clase (no tengo claro si ponerlo aqui suelto)???????
+// METODO STATIC fuera de la clase.
 static void setNonBlockingOrExit(int fd) {
     if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
-        perror("fcntl"); // OJO: revisar si lo dejo asi o mejor un throw ?????
-        close(fd);
-        exit(1); // No tengo claro si salir asi o con EXIT_FAILURE, cerrar todo limpiamente (fds)
+        throw std::runtime_error("Error on fcntl");
     }
 }
 
 
-Server::Server(const int port, const std::string& password)
+Server::Server(const int port, const std::string &password)
 : _port(port), _password(password), _server_fd(-1) { // server_fd -1 por seguridad y robustez
     initSocket(); 
 }
 
 // DESTRUCTOR
 Server::~Server() {
-    if (_server_fd != -1)
-        close(_server_fd);
+    // if (_server_fd != -1) {
+    //     close(_server_fd);
+	// }
+	shutdown();
 }
 
 // INICIALIZA EL SOCKET DEL SERVER, LO PONE EN ESCUCHA Y LO ANAYDE AL VECTOR _fds
 void Server::initSocket() {
     _server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (_server_fd == -1) {
-        throw std::runtime_error("Error at socket creation"); // Gestionar salida limpia del prog
+        throw std::runtime_error("Error at socket creation");
     }
     setNonBlockingOrExit(_server_fd);
 
@@ -76,9 +76,9 @@ void Server::handleNewConnection() {
     socklen_t client_len = sizeof(client_addr);
     int client_fd = accept(_server_fd, (struct sockaddr*)&client_addr, &client_len);
     if (client_fd == -1) {
-        perror("accept"); // OJO: quizas deberia lanzar Exception ?????
-        return;
+        throw std::runtime_error("Error on accept");
     }
+
     setNonBlockingOrExit(client_fd);
     std::cout << "New client in fd " << client_fd << std::endl;
 
@@ -89,7 +89,7 @@ void Server::handleNewConnection() {
     client_pollfd.revents = 0;
     _fds.push_back(client_pollfd);
 
-	// CREA OBJ Client Y LO ANYADE AL MAP DE _clients
+	// CREA OBJ Client Y LO ANYADE AL MAP _clients
     _clients[client_fd] = Client(client_fd);
 }
 
@@ -100,7 +100,7 @@ void Server::handleClientMessage(size_t i) {
     int fd = _fds[i].fd;
     int bytes = recv(fd, buffer, 511, 0); // el byte 512 es para el cierre \0, el 0 es una flag
 
-    if (bytes <= 0) { // cliente cerro conexion o hubo error de lectura
+    if (bytes <= 0) { // el cliente cerro la conexion o hubo un error de lectura
         std::cout << "Cliente desconectado fd=" << fd << std::endl;
         close(fd);
         _clients.erase(fd);
@@ -114,11 +114,39 @@ void Server::handleClientMessage(size_t i) {
     send(fd, "Servidor: mensaje recibido\r\n", 29, 0); // 29: es num de bytes que envia
 }
 
+// Signal handler
+// void Server::signalHandler(int signum) { // recogera realmente la senyal????
+//     g_running = 0; // Fuerza la salida del loop del server
+//}
+
+
+void Server::shutdown() {
+    // cerrar clientes
+    for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+        close(it->first);
+    }
+    _clients.clear();
+
+    // cerrar listen
+    if (_server_fd != -1) {
+        close(_server_fd);
+        _server_fd = -1;
+    }
+
+    _fds.clear();
+    std::cout << "[INFO] Server shutdown executed" << std::endl;
+}
+
+
 // ESCUCHA PERMANENTE DE ACTIVIDAD CON poll()
 void Server::run() {
-    while (true) { // para manejar las senyales podemos poner com arg del bucle el flag atomico global
-        int activity = poll(&_fds[0], _fds.size(), -1); // timeout: -1 = espera indefinida (bloqueante)
-        if (activity < 0) throw std::runtime_error("Error en poll");
+    while (g_running) { //Si toma valor false saldra del bucle en 500 ms
+        int activity = poll(&_fds[0], _fds.size(), 500); // timeout: espera 500 ms para salir
+        if (activity < 0) {
+			if (errno == EINTR)
+				continue; // si una señal interrumpió poll() -> salta al inicio del bucle
+			throw std::runtime_error("Error en poll");
+		} 
 
         for (size_t i = 0; i < _fds.size(); ++i) {
             if (_fds[i].revents & POLLIN) {

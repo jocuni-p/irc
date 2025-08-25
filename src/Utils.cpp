@@ -11,3 +11,10 @@ bool Server::isValidPasswordArg(const std::string &pass) {
 	}
 	return (true);
 }
+
+bool Server::isValidPortArg(const int &port) {
+	if (port <= 1023 || port > 65535) {
+		return (false);
+	}
+	return (true);
+}

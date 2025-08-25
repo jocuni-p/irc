@@ -12,13 +12,12 @@
 #include "Client.hpp"
 #include "Channel.hpp"
 
-//class Client; // Incluyo la clase aqui o arriba?????
 
 class Server {
 private:
-    const int _port; // no modificable ?????
-    const std::string _password; // no sera modificable
-    int _server_fd; // no modificable
+    const int _port;
+    const std::string _password;
+    int _server_fd;
     std::vector<struct pollfd> _fds;
     std::map<int, Client> _clients;       // fd -> Client
     std::map<std::string, Channel> _channels; // nombre -> Channel
@@ -28,14 +27,20 @@ private:
     void initSocket();
     void handleNewConnection();
     void handleClientMessage(size_t i);
+	void shutdown(); // Limpia todo correctamente
 
+	
 public:
-    Server(int port, const std::string& password);
+    Server(int port, const std::string &password);
     ~Server();
-
+	
     void run();
-
+	
 	static bool isValidPasswordArg(const std::string &pass);
+	static bool isValidPortArg(const int &port);
 };
+
+//	void signalHandler(int signum);
+
 
 #endif
