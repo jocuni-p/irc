@@ -9,6 +9,8 @@
 #include <cstdio> // perror
 #include <cerrno>
 
+#include "globals.hpp"
+
 // METODO STATIC fuera de la clase.
 static void setNonBlockingOrExit(int fd) {
     if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
