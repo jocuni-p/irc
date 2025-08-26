@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
 	try {
 		//VALIDACIONES
 		if (argc != 3) {
-			throw(std::runtime_error("Error: Invalid argument number.\nUsage ./ircserv <port> <password>"));
+			throw(std::runtime_error("Error.\nUsage ./ircserv <port> <password>"));
 		}
 
 		port = atoi(argv[1]);
@@ -38,9 +38,9 @@ int main(int argc, char **argv) {
 		// Captura señales
         std::signal(SIGINT, signalHandler);
         std::signal(SIGTERM, signalHandler);
+//		std::signal(SIGQUIT, signalHandler); // no necesario manejar, es mas para debbuger (termina y genera un core dump para poder debbugar los errores)
 
-
-		irc.run(); // bucle infinito
+		irc.run(); // bucle de aceptacion conexiones
 
 
 		std::cout << "Server shutdown gracefully" << std::endl;

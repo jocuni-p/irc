@@ -15,13 +15,14 @@
 
 class Server {
 private:
-    const int _port;
-    const std::string _password;
-    int _server_fd;
-    std::vector<struct pollfd> _fds;
-    std::map<int, Client> _clients;       // fd -> Client
-    std::map<std::string, Channel> _channels; // nombre -> Channel
-    struct sockaddr_in _server_addr; //struct del sistema, contiene IP y puerto del socket
+    const int 						_port;
+    const std::string 				_password;
+    int 							_server_fd;
+    struct sockaddr_in 				_server_addr; //struct del sistema, contiene IP y puerto del socket
+	static bool                 	_signalFlag;  // para detectar las senyales
+	std::vector<struct pollfd> 		_fds;
+    std::map<int, Client> 			_clients;       // fd -> Client
+//    std::map<std::string, Channel> 	_channels; // nombre -> Channel
 
 
     void initSocket();
@@ -34,13 +35,13 @@ public:
     Server(int port, const std::string &password);
     ~Server();
 	
-    void run();
+    void run(); // bucle de poll()
 	
 	static bool isValidPasswordArg(const std::string &pass);
 	static bool isValidPortArg(const int &port);
+	static void signalHandler(int signum);
 };
 
-//	void signalHandler(int signum);
 
 
 #endif

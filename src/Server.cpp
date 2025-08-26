@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <unistd.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -11,10 +12,11 @@
 
 #include "globals.hpp"
 
+
 // METODO STATIC fuera de la clase.
 static void setNonBlockingOrExit(int fd) {
-    if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
-        throw std::runtime_error("Error on fcntl");
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
+		throw std::runtime_error("Error on fcntl");
     }
 }
 
@@ -26,82 +28,85 @@ Server::Server(const int port, const std::string &password)
 
 // DESTRUCTOR
 Server::~Server() {
-    // if (_server_fd != -1) {
-    //     close(_server_fd);
-	// }
+	// if (_server_fd != -1) {
+		//     close(_server_fd);
+		// }
 	shutdown();
 }
 
 // INICIALIZA EL SOCKET DEL SERVER, LO PONE EN ESCUCHA Y LO ANAYDE AL VECTOR _fds
 void Server::initSocket() {
+	
+	struct pollfd server_pollfd;
+	
     _server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (_server_fd == -1) {
-        throw std::runtime_error("Error at socket creation");
+		throw std::runtime_error("Error at socket creation");
     }
+	
     setNonBlockingOrExit(_server_fd);
-
+	
 	// LIBERA PUERTO RAPIDAMENTE para que lo pueda usar otro proceso
     int opt = 1;
     if (setsockopt(_server_fd, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt)) == -1) {
-        throw std::runtime_error("Error on setsockopt");
+		throw std::runtime_error("Error on setsockopt()");
     }
-
+	
 	// CONFIGURA STRUCT PARA EL SOCKET (asigna IP y PORT)
     std::memset(&_server_addr, 0, sizeof(_server_addr));
     _server_addr.sin_family = AF_INET; // tipo de domain/IP (ipv4)
     _server_addr.sin_port = htons(_port); // puerto de entrada (donde escucha)
     _server_addr.sin_addr.s_addr = INADDR_ANY; // rango de IPs que escuchará (ANY: todas)
-
+	
 	// ENLAZA SERVER SOCKET(fd) a su struct de datos(socket <-> IP + PORT)
     if (bind(_server_fd, (struct sockaddr*)&_server_addr, sizeof(_server_addr)) == -1) {
-        throw std::runtime_error("Error on bind");
+		throw std::runtime_error("Error on bind() socket");
     }
-
-	// PONE EN ESCUCHA EL PUERTO del socket (fd, num conexiones admitidas en cola)
-    if (listen(_server_fd, 5) == -1) {
-        throw std::runtime_error("Error on listen");
+	
+	// PONE EN ESCUCHA EL PUERTO del socket (fd, num conexiones max admitidas en SO)
+    if (listen(_server_fd, SOMAXCONN) == -1) {
+		throw std::runtime_error("Error on listen()");
     }
-
+	
 	// AÑADO struct pollfd DEL SERVER AL VECTOR _fds, será el elemento [0]
-    struct pollfd server_pollfd;
     server_pollfd.fd = _server_fd; // fd a monitorear
     server_pollfd.events = POLLIN; // mascara de bits (indica eventos que escucha)
     server_pollfd.revents = 0; // mascara de bits rellenada por poll()(con los eventos ya ocurridos)
     _fds.push_back(server_pollfd); // Anyade la struct del server al vector de pollfds
-
+	
     std::cout << "Server ready on port " << _port << std::endl;
 }
 
 // MANEJA CONEXION AL SERVER DE LOS fd DESCONOCIDOS (NUEVOS CLIENTES)
 void Server::handleNewConnection() {
-    struct sockaddr_in client_addr;
+	struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     int client_fd = accept(_server_fd, (struct sockaddr*)&client_addr, &client_len);
     if (client_fd == -1) {
-        throw std::runtime_error("Error on accept");
+		throw std::runtime_error("Error on accept");
     }
-
+	
     setNonBlockingOrExit(client_fd);
     std::cout << "New client in fd " << client_fd << std::endl;
-
+	
 	// AÑADO struct pollfd DEL NEW CLIENT AL VECTOR _fds
     struct pollfd client_pollfd;
     client_pollfd.fd = client_fd;
     client_pollfd.events = POLLIN;
     client_pollfd.revents = 0;
     _fds.push_back(client_pollfd);
-
+	
 	// CREA OBJ Client Y LO ANYADE AL MAP _clients
     _clients[client_fd] = Client(client_fd);
 }
 
 //MANEJA CONEXION AL SERVER DE LOS fd CONOCIDOS (MENSAJES)
 void Server::handleClientMessage(size_t i) {
-    char buffer[512];
+	char buffer[512];
     std::memset(buffer, 0, 512);
     int fd = _fds[i].fd;
     int bytes = recv(fd, buffer, 511, 0); // el byte 512 es para el cierre \0, el 0 es una flag
-
+	
     if (bytes <= 0) { // el cliente cerro la conexion o hubo un error de lectura
         std::cout << "Cliente desconectado fd=" << fd << std::endl;
         close(fd);
@@ -109,50 +114,47 @@ void Server::handleClientMessage(size_t i) {
         _fds.erase(_fds.begin() + i); // borramos el fb desconectado del vector -fds
         return;
     }
-
+	
     std::string msg(buffer);
     std::cout << "Mensaje de " << fd << ": " << msg;
-
+	
     send(fd, "Servidor: mensaje recibido\r\n", 29, 0); // 29: es num de bytes que envia
 }
 
-// Signal handler
-// void Server::signalHandler(int signum) { // recogera realmente la senyal????
-//     g_running = 0; // Fuerza la salida del loop del server
-//}
-
 
 void Server::shutdown() {
-    // cerrar clientes
+	// cerrar clientes
     for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
-        close(it->first);
+		close(it->first);
     }
     _clients.clear();
-
+	
     // cerrar listen
-    if (_server_fd != -1) {
-        close(_server_fd);
-        _server_fd = -1;
-    }
-
+    // if (_server_fd != -1) {
+	// 	close(_server_fd);
+    //     _server_fd = -1;
+    // }
+	
     _fds.clear();
     std::cout << "[INFO] Server shutdown executed" << std::endl;
 }
 
 
 // ESCUCHA PERMANENTE DE ACTIVIDAD CON poll()
+// si una señal externa (Ctrl+C) despierta a poll(), va al inicio
+// del bucle y sale de la funcion aunque no haya actividad en los sockets
 void Server::run() {
-    while (g_running) { //Si toma valor false saldra del bucle en 500 ms
-        int activity = poll(&_fds[0], _fds.size(), 500); // timeout: espera 500 ms para salir
+	while (Server::_signalFlag == false) { 
+		int activity = poll(&_fds[0], _fds.size(), -1); // -1 espera indefinidamente
         if (activity < 0) {
-			if (errno == EINTR)
-				continue; // si una señal interrumpió poll() -> salta al inicio del bucle
+			if (errno == EINTR) // salida de poll() cuando recibe una signal externa
+			continue; 
 			throw std::runtime_error("Error en poll");
 		} 
-
+		
         for (size_t i = 0; i < _fds.size(); ++i) {
-            if (_fds[i].revents & POLLIN) {
-                if (_fds[i].fd == _server_fd) { // actividad en el fd del server
+			if (_fds[i].revents & POLLIN) {
+				if (_fds[i].fd == _server_fd) { // actividad en el fd del server
                     handleNewConnection();
                 } else { // actividad en algun fd de cliente
                     handleClientMessage(i);
@@ -160,4 +162,15 @@ void Server::run() {
             }
         }
     }
+}
+
+//Definicion e inicializacion, fuera de la clase.
+bool Server::_signalFlag = false;
+
+// Setea a true la flag de signals
+void Server::signalHandler(int signum)
+{
+    (void)signum;
+	//    std::cout << std::endl << "Signal Received!" << std::endl;
+    Server::_signalFlag = true;
 }
