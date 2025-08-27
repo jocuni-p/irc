@@ -25,12 +25,12 @@ int main(int argc, char **argv) {
 
 		port = atoi(argv[1]);
 		if (!Server::isValidPortArg(port)) {
-			throw(std::runtime_error("Error: Recommended port for a non encrypted IRC: 6667"));
+			throw(std::runtime_error("Failure: Recommended port for a non encrypted IRC: 6667"));
 		}
 		
 		pass = argv[2];
 		if (!Server::isValidPasswordArg(pass)) {
-			throw(std::runtime_error("Error: Password must contain only printable ASCII chars (no spaces) and max 20 chars"));
+			throw(std::runtime_error("Failure: Password must contain only printable ASCII chars (no spaces) and max 20 chars"));
 		}
 		//CREACION Y EJECUCION DEL SERVIDOR
 		Server irc(port, pass);
