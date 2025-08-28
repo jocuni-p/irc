@@ -328,7 +328,7 @@ void Server::handleNick(Client *cli, const std::vector<std::string> &tokens)
 
 void Server::handleUser(Client *cli, const std::vector<std::string> &tokens)
 {
-	if (tokens.size() < 2)
+	if (tokens.size() < 2) // OJO hay 4 tokens !!!!!!
 	{
 		sendToClient(cli->getFd(), "461 USER :Not enough parameters\r\n");
 		return;

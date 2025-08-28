@@ -22,8 +22,6 @@ private:
     std::string _username; //<username> <hostname> <servername> <realname>
 	LoginStatus _status; // 0=no autenticado, 1=pass ok, 2=nick ok, 3=user ok, 4=autenticado
     std::string _buffer;  // buffer acumulativo de datos recibidos
-
-	// En IRC el handshake inicial (PASS + NICK + USER) es obligatorio antes del protocolo IRC
 	
 public:
     Client() : _fd(-1), _status(NOT_AUTHENTICATED) {}

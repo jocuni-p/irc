@@ -27,7 +27,7 @@ private:
 	static bool _signalFlag; // para detectar las senyales
 	std::vector<struct pollfd> _fds;
 	std::map<int, Client> _clients; // fd -> Client
-									//    std::map<std::string, Channel> 	_channels; // nombre -> Channel
+//    std::map<std::string, Channel> 	_channels; // nombre -> Channel
 
 	void initSocket();
 	void handleNewConnection();
