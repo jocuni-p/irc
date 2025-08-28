@@ -7,18 +7,21 @@ NAME = ircserv
 # Directories
 SRC_DIR = src
 OBJ_DIR = obj
+INC_DIR = include
 
 # Source files
-SRCS = $(SRC_DIR)/main.cpp \
-       $(SRC_DIR)/Server.cpp \
-       $(SRC_DIR)/Client.cpp
-#       $(SRC_DIR)/Channel.cpp
+SRCS = 	$(SRC_DIR)/main.cpp \
+		$(SRC_DIR)/Server.cpp \
+		$(SRC_DIR)/Client.cpp \
+		$(SRC_DIR)/Utils.cpp 
+#		$(SRC_DIR)/Channel.cpp \
 
 # Object files
 OBJS = $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 
 # Default target
 all: $(NAME)
+	@echo "Usage: ./ircserv <port> <password>"
 
 # Linking
 $(NAME): $(OBJS)
@@ -27,7 +30,7 @@ $(NAME): $(OBJS)
 # Compilation (crea obj/ si no existe)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(OBJ_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(INC_DIR) -c $< -o $@
 
 # Clean object files
 clean:

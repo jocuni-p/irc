@@ -24,37 +24,32 @@ private:
     std::string _buffer;  // buffer acumulativo de datos recibidos
 	
 public:
-    Client() : _fd(-1), _status(NOT_AUTHENTICATED) {}
-    Client(int fd) : _fd(fd), _status(NOT_AUTHENTICATED) {}
+	Client();
+	Client(int fd);
 
-    // --- Getters / Setters básicos ---
-    int getFd() const { return _fd; }
-    void setFd(int fd) { _fd = fd; }
+	~Client();
 
-    const std::string& getIp() const { return _ip; }
-    void setIp(const std::string& ip) { _ip = ip; }
+	// --- Getters / Setters básicos ---
+	int getFd() const;
+	void setFd(int fd);
 
-    const std::string& getNick() const { return _nickname; }
-    void setNick(const std::string& nick) { _nickname = nick; }
+	const std::string &getIp() const;
+	void setIp(const std::string &ip);
 
-    const std::string& getUser() const { return _username; }
-    void setUser(const std::string& user) { _username = user; }
+	const std::string &getNick() const;
+	void setNick(const std::string &nick);
 
-	LoginStatus getStatus() const { return _status; }
-    void setStatus(LoginStatus s) { _status = s; }
+	const std::string &getUser() const;
+	void setUser(const std::string &user);
 
-	
-    // --- Buffer de entrada ---
-    void appendToBuffer(const std::string& data) {
-        _buffer += data;
-        // Si quisieras protegerte de flood:
-        if (_buffer.size() > 4096) {  // ejemplo: límite de 8 comandos (~512*8)
-            _buffer.clear(); // o desconectar cliente
-        }
-    }
+	LoginStatus getStatus() const;
+	void setStatus(LoginStatus s);
 
-    std::string& getBuffer() { return _buffer; }
-    void clearBuffer() { _buffer.clear(); }
+	// --- Buffer de entrada ---
+	void appendToBuffer(const std::string &data);
+
+	std::string &getBuffer();
+	void clearBuffer();
 };
 
 #endif

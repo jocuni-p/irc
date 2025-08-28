@@ -24,7 +24,7 @@ private:
 	struct sockaddr_in _server_addr; // struct del sistema, contiene IP y puerto del socket
 
 	// Execution
-	static bool _signalFlag; // para detectar las senyales
+	static bool _signalFlag;
 	std::vector<struct pollfd> _fds;
 	std::map<int, Client> _clients; // fd -> Client
 //    std::map<std::string, Channel> 	_channels; // nombre -> Channel
@@ -39,6 +39,7 @@ private:
 	void sendToClient(int fd, const std::string &msg);
 	void handshake(Client *cli, const std::string &cmd);
 	void processCommand(Client *cli, const std::string &cmd);
+	void handleCap(Client *cli); //, const std::vector<std::string> &tokens);
 	void handlePass(Client *cli, const std::vector<std::string> &tokens);
 	void handleNick(Client *cli, const std::vector<std::string> &tokens);
 	void handleUser(Client *cli, const std::vector<std::string> &tokens);

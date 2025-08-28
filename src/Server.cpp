@@ -11,8 +11,6 @@
 #include <cstdio> // perror
 #include <cerrno>
 
-#include "globals.hpp"
-
 // METODO STATIC fuera de la clase.
 static void setNonBlockingOrExit(int fd)
 {
@@ -24,36 +22,30 @@ static void setNonBlockingOrExit(int fd)
 
 // CONSTRUCTOR
 Server::Server(const int port, const std::string &password)
-	: _port(port), _password(password), _server_fd(-1)
-{ // server_fd -1 por seguridad y robustez
+	: _port(port), _password(password), _server_fd(-1) {
 	initSocket();
 }
 
 // DESTRUCTOR
-Server::~Server()
-{
+Server::~Server() {
 	shutdown();
 }
 
 // INICIALIZA EL SOCKET DEL SERVER, LO PONE EN ESCUCHA Y LO ANAYDE AL VECTOR _fds
-void Server::initSocket()
-{
-
+void Server::initSocket() {
 	struct pollfd server_pollfd;
 
 	_server_fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (_server_fd == -1)
-	{
-		throw std::runtime_error("socket creation failed");
+	if (_server_fd == -1) {
+		throw std::runtime_error("(!) ERROR: initServer: socket()");
 	}
 
 	setNonBlockingOrExit(_server_fd);
 
-	// LIBERA PUERTO RAPIDAMENTE para que lo pueda usar otro proceso
+	// LIBERA PUERTO RAPIDAMENTE
 	int opt = 1;
-	if (setsockopt(_server_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt)) == -1)
-	{
-		throw std::runtime_error("Failure on setsockopt()");
+	if (setsockopt(_server_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt)) == -1) {
+		throw std::runtime_error("(!) ERROR: initServer: setsockopt()");
 	}
 
 	// CONFIGURA STRUCT PARA EL SOCKET (asigna IP y PORT)
@@ -62,16 +54,14 @@ void Server::initSocket()
 	_server_addr.sin_port = htons(_port);	   // puerto de entrada (donde escucha)
 	_server_addr.sin_addr.s_addr = INADDR_ANY; // rango de IPs que escuchará (ANY: todas)
 
-	// ENLAZA SERVER SOCKET(fd) a su struct de datos(socket <-> IP + PORT)
-	if (bind(_server_fd, (struct sockaddr *)&_server_addr, sizeof(_server_addr)) == -1)
-	{
-		throw std::runtime_error("Failure on bind() socket");
+	// ENLAZA socket(fd) a su struct de datos(socket <-> IP + PORT)
+	if (bind(_server_fd, (struct sockaddr *)&_server_addr, sizeof(_server_addr)) == -1) {
+		throw std::runtime_error("(!) ERROR: initServer: bind()");
 	}
 
 	// PONE EN ESCUCHA EL PUERTO del socket (fd, num conexiones max admitidas en SO)
-	if (listen(_server_fd, SOMAXCONN) == -1)
-	{
-		throw std::runtime_error("Failure on listen()");
+	if (listen(_server_fd, SOMAXCONN) == -1) {
+		throw std::runtime_error("(!) ERROR: initServer: listen()");
 	}
 
 	// AÑADO struct pollfd DEL SERVER AL VECTOR _fds, será el elemento [0]
@@ -80,40 +70,68 @@ void Server::initSocket()
 	server_pollfd.revents = 0;	   // mascara de bits rellenada por poll()(con los eventos ya ocurridos)
 	_fds.push_back(server_pollfd); // Anyade la struct del server al vector de pollfds
 
-	std::cout << "Server ready on port " << _port << std::endl;
+	std::cout << "* Server initializing...\n* Server listening on port <" << _port << ">" << std::endl;
 }
 
 // MANEJA CONEXION AL SERVER DE LOS fd DESCONOCIDOS (NUEVOS CLIENTES)
-void Server::handleNewConnection()
+void Server::handleNewConnection() 
 {
 	struct sockaddr_in client_addr;
 	socklen_t client_len = sizeof(client_addr);
+	std::cout << "handleNewConnection() 1" << std::endl; // DEBUG
+	// int client_fd = accept(_server_fd, (struct sockaddr *)&client_addr, &client_len);
+	// if (client_fd == -1) {
+	// 	if (errno == EAGAIN || errno == EWOULDBLOCK)
+    //     {
+    //         // No había conexión pendiente, volvemos al loop principal
+    //         return;
+    //     }
+    //     // perror("accept"); // error real
+    //     // return; // o: throw std::runtime_error("accept() fatal");
+	// 	throw std::runtime_error("(!) ERROR: NewConnection: accept()");
+    // }
+    // REEMPLAZADO POR:
+    while (true)
+    {
+		std::cout << "handleNewConnection() 2" << std::endl; // DEBUG
+        int client_fd = accept(_server_fd, (struct sockaddr *)&client_addr, &client_len);
+        std::cout << "handleNewConnection() 3" << std::endl; // DEBUG
+		if (client_fd == -1)
+        {
+			std::cout << "handleNewConnection() 4" << std::endl; // DEBUG
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				std::cout << "handleNewConnection() 5" << std::endl; // DEBUG
+                break; // no hay más conexiones pendientes
+			}
+            throw std::runtime_error("(!) ERROR: NewConnection: accept()");
+        }
+		
+		std::cout << "handleNewConnection() 6" << std::endl; // DEBUG
+		setNonBlockingOrExit(client_fd); // Si falla salta una exception
+		
+		// AÑADO struct pollfd DEL NEW CLIENT AL VECTOR _fds
+		struct pollfd client_pollfd;
+		client_pollfd.fd = client_fd;
+		client_pollfd.events = POLLIN;
+		client_pollfd.revents = 0;
+		_fds.push_back(client_pollfd);
 
-	int client_fd = accept(_server_fd, (struct sockaddr *)&client_addr, &client_len);
-	if (client_fd == -1)
-	{
-		throw std::runtime_error("accept() failed");
+		std::cout << "handleNewConnection() 7" << std::endl; // DEBUG
+
+		// CREA OBJ Client Y LO ANYADE AL MAP _clients
+		_clients[client_fd] = Client(client_fd);
+		// forma alternativa de construir el obj directamente en el map
+		//_clients.insert(std::pair<int, Client>(client_fd, Client(client_fd)));
+		
+		std::cout << "***Client connected fd <" << client_fd << ">" << std::endl;
+		// OJO; PENDIENTE DE IMPLEMENTAR getAddr para obtener IP y port del client
+		//	std::cout << "Client IP: " << inet_ntoa(obj_cli.getAddr().sin_addr) << std::endl;
+		//	std::cout << "Client Port: " << ntohs(obj_cli.getAddr().sin_port) << std::endl;
+		std::cout << "handleNewConnection() 8" << std::endl; // DEBUG
 	}
-
-	setNonBlockingOrExit(client_fd); // Si falla salta exception
-
-	// AÑADO struct pollfd DEL NEW CLIENT AL VECTOR _fds
-	struct pollfd client_pollfd;
-	client_pollfd.fd = client_fd;
-	client_pollfd.events = POLLIN;
-	client_pollfd.revents = 0;
-	_fds.push_back(client_pollfd);
-
-	// CREA OBJ Client Y LO ANYADE AL MAP _clients
-	_clients[client_fd] = Client(client_fd);
-	// forma alternativa de construir el obj directamente en el map
-	//_clients.insert(std::pair<int, Client>(client_fd, Client(client_fd)));
-
-	std::cout << "New client in fd <" << client_fd << ">" << std::endl;
 }
 
-Client *Server::getClient(int fd)
-{
+Client *Server::getClient(int fd) {
 	std::map<int, Client>::iterator it = _clients.find(fd);
 	if (it == _clients.end())
 		return NULL;	  // no encontrado
@@ -121,19 +139,38 @@ Client *Server::getClient(int fd)
 }
 
 // MANEJA CONEXIONES AL SERVER DE LOS fd CONOCIDOS (MENSAJES)
-void Server::handleClientMessage(size_t i)
-{
+void Server::handleClientMessage(size_t i) {
+	std::cout << "handleClientMessage() 1" << std::endl; //DEBUG
 	int fd = _fds[i].fd;
 	char buffer[1024]; // pueden llegar comandos concatenados, fragmentados, ya procesaremos luego en parser segun protocol IRC.
 	std::memset(buffer, 0, sizeof(buffer));
 
 	ssize_t bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
+	//=================================================
 
-	if (bytes <= 0)
-	{						  // cliente cerro la conexion o error de lectura
-		disconnectClient(fd); // un solo punto de desconexión
+	if (bytes == 0) {
+		// Cliente cerró conexión
+		disconnectClient(fd);
 		return;
 	}
+	else if (bytes < 0) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			// No hay datos disponibles, esperamos al siguiente poll()
+			return;
+		} else {
+			// Error real de lectura
+			disconnectClient(fd);
+			return;
+		}
+	}
+
+	//===============================================
+
+	// if (bytes <= 0){  // cliente cerro la conexion o error de lectura
+	// 	std::cout << "handleClientMessage() 2" << std::endl; // DEBUG
+	// 	disconnectClient(fd); // un solo punto de desconexión
+	// 	return;
+	// }
 
 	// Recuperar el cliente desde el map
 	Client *cli = getClient(fd);
@@ -149,6 +186,7 @@ void Server::handleClientMessage(size_t i)
 
 	while ((pos = buf.find("\r\n")) != std::string::npos)
 	{
+		std::cout << "handleClientMessage() 3" << std::endl; // DEBUG
 		std::string command = buf.substr(0, pos);
 		buf.erase(0, pos + 2); // eliminar hasta \r\n
 
@@ -162,6 +200,7 @@ void Server::handleClientMessage(size_t i)
 		}
 	}
 }
+
 
 void Server::disconnectClient(int client_fd)
 {
@@ -196,7 +235,7 @@ void Server::shutdown()
 	}
 	_clients.clear();
 	_fds.clear();
-	std::cout << "[INFO] Server shutdown executed" << std::endl;
+	std::cout << "\n[INFO] Server shutdown gracefully" << std::endl;
 }
 
 //=============================================
@@ -262,7 +301,11 @@ void Server::handshake(Client *cli, const std::string &cmd)
 		return;
 
 	// Procesamos comandos de autenticación
-	if (command == "PASS")
+	if (command == "CAP")
+	{
+		handleCap(cli); //, tokens);
+	}
+	else if (command == "PASS")
 	{
 		handlePass(cli, tokens);
 	}
@@ -288,6 +331,20 @@ void Server::handshake(Client *cli, const std::string &cmd)
 				  << " registered as " << cli->getNick() << std::endl;
 	}
 }
+
+void Server::handleCap(Client *cli) //, const std::vector<std::string> &tokens)
+{
+    // Responder con lista vacía de capabilities
+    std::ostringstream reply;
+    std::string nick = cli->getNick().empty() ? "nickname" : cli->getNick();
+
+    reply << ":Server CAP " 
+          << nick 
+          << " LS :\r\n";
+
+    sendToClient(cli->getFd(), reply.str());
+}
+
 
 void Server::handlePass(Client *cli, const std::vector<std::string> &tokens)
 {
