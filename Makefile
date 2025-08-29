@@ -1,6 +1,6 @@
 # Compiler settings
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++98
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -g
 
 NAME = ircserv
 

@@ -114,9 +114,9 @@ void Server::handleNewConnection() //gestiona las conexiones entrantes una a una
 		std::cout << "[DEBUG] handleNewConnection() 7" << std::endl; // DEBUG
 
 		// CREA OBJ Client Y LO ANYADE AL MAP _clients
-		_clients[client_fd] = Client(client_fd);
+		//////////////_clients[client_fd] = Client(client_fd);
 		// forma alternativa de construir el obj directamente en el map
-		//_clients.insert(std::pair<int, Client>(client_fd, Client(client_fd)));
+		_clients.insert(std::pair<int, Client>(client_fd, Client(client_fd)));
 		
 		std::cout << "[INFO] Client connected fd <" << client_fd << ">" << std::endl;
 		// OJO; PENDIENTE DE IMPLEMENTAR getAddr para obtener IP y port del client
