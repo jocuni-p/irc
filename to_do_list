@@ -2,11 +2,11 @@ TAREAS:
 
 -Tendremos una clase general "Server" de la que dependeran la clases "Client" y "Channel".
 
+IMPORTANTE: cuando se reciba una SIGINT (Ctrl+C) hay que gestionar un cierre limpio de todos los recursos (sockets, memorias, containers, ...)
 
 
 
-
-
+//check MAXCONN de clientes al server
 
 
 FILE SERVER:

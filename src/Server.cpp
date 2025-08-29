@@ -74,39 +74,34 @@ void Server::initSocket() {
 }
 
 // MANEJA CONEXION AL SERVER DE LOS fd DESCONOCIDOS (NUEVOS CLIENTES)
-void Server::handleNewConnection() 
+void Server::handleNewConnection() //gestiona las conexiones entrantes una a una
 {
 	struct sockaddr_in client_addr;
 	socklen_t client_len = sizeof(client_addr);
-	std::cout << "handleNewConnection() 1" << std::endl; // DEBUG
-	// int client_fd = accept(_server_fd, (struct sockaddr *)&client_addr, &client_len);
-	// if (client_fd == -1) {
-	// 	if (errno == EAGAIN || errno == EWOULDBLOCK)
+	std::cout << "[DEBUG] handleNewConnection() 1" << std::endl; // DEBUG
+	int client_fd = accept(_server_fd, (struct sockaddr *)&client_addr, &client_len);
+	if (client_fd == -1) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) // si no hubo nada que aceptar, vuelve al loop principal (run)
+            return;
+		throw std::runtime_error("(!) ERROR: handleNewConnection(): accept()");
+    }
+    // POSIBLE REEMPLAZO: acepta todoas las conexiones entrantes de golpe y las va gestionando en el bucle
+    // while (true)
+    // {
+	// 	std::cout << "handleNewConnection() 2" << std::endl; // DEBUG
+    //     int client_fd = accept(_server_fd, (struct sockaddr *)&client_addr, &client_len);
+    //     std::cout << "handleNewConnection() 3" << std::endl; // DEBUG
+	// 	if (client_fd == -1)
     //     {
-    //         // No había conexión pendiente, volvemos al loop principal
-    //         return;
+	// 		std::cout << "handleNewConnection() 4" << std::endl; // DEBUG
+    //         if (errno == EAGAIN || errno == EWOULDBLOCK) {
+	// 			std::cout << "handleNewConnection() 5" << std::endl; // DEBUG
+    //             break; // no hay más conexiones pendientes
+	// 		}
+    //         throw std::runtime_error("(!) ERROR: NewConnection: accept()");
     //     }
-    //     // perror("accept"); // error real
-    //     // return; // o: throw std::runtime_error("accept() fatal");
-	// 	throw std::runtime_error("(!) ERROR: NewConnection: accept()");
-    // }
-    // REEMPLAZADO POR:
-    while (true)
-    {
-		std::cout << "handleNewConnection() 2" << std::endl; // DEBUG
-        int client_fd = accept(_server_fd, (struct sockaddr *)&client_addr, &client_len);
-        std::cout << "handleNewConnection() 3" << std::endl; // DEBUG
-		if (client_fd == -1)
-        {
-			std::cout << "handleNewConnection() 4" << std::endl; // DEBUG
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				std::cout << "handleNewConnection() 5" << std::endl; // DEBUG
-                break; // no hay más conexiones pendientes
-			}
-            throw std::runtime_error("(!) ERROR: NewConnection: accept()");
-        }
 		
-		std::cout << "handleNewConnection() 6" << std::endl; // DEBUG
+		std::cout << "[DEBUG] handleNewConnection() 6" << std::endl; // DEBUG
 		setNonBlockingOrExit(client_fd); // Si falla salta una exception
 		
 		// AÑADO struct pollfd DEL NEW CLIENT AL VECTOR _fds
@@ -116,20 +111,20 @@ void Server::handleNewConnection()
 		client_pollfd.revents = 0;
 		_fds.push_back(client_pollfd);
 
-		std::cout << "handleNewConnection() 7" << std::endl; // DEBUG
+		std::cout << "[DEBUG] handleNewConnection() 7" << std::endl; // DEBUG
 
 		// CREA OBJ Client Y LO ANYADE AL MAP _clients
 		_clients[client_fd] = Client(client_fd);
 		// forma alternativa de construir el obj directamente en el map
 		//_clients.insert(std::pair<int, Client>(client_fd, Client(client_fd)));
 		
-		std::cout << "***Client connected fd <" << client_fd << ">" << std::endl;
+		std::cout << "[INFO] Client connected fd <" << client_fd << ">" << std::endl;
 		// OJO; PENDIENTE DE IMPLEMENTAR getAddr para obtener IP y port del client
 		//	std::cout << "Client IP: " << inet_ntoa(obj_cli.getAddr().sin_addr) << std::endl;
 		//	std::cout << "Client Port: " << ntohs(obj_cli.getAddr().sin_port) << std::endl;
-		std::cout << "handleNewConnection() 8" << std::endl; // DEBUG
-	}
+	//	std::cout << "[DEBUG] handleNewConnection() 8" << std::endl; // DEBUG
 }
+
 
 Client *Server::getClient(int fd) {
 	std::map<int, Client>::iterator it = _clients.find(fd);
@@ -140,7 +135,7 @@ Client *Server::getClient(int fd) {
 
 // MANEJA CONEXIONES AL SERVER DE LOS fd CONOCIDOS (MENSAJES)
 void Server::handleClientMessage(size_t i) {
-	std::cout << "handleClientMessage() 1" << std::endl; //DEBUG
+	std::cout << "[DEBUG] handleClientMessage() 1" << std::endl; //DEBUG
 	int fd = _fds[i].fd;
 	char buffer[1024]; // pueden llegar comandos concatenados, fragmentados, ya procesaremos luego en parser segun protocol IRC.
 	std::memset(buffer, 0, sizeof(buffer));
@@ -186,7 +181,7 @@ void Server::handleClientMessage(size_t i) {
 
 	while ((pos = buf.find("\r\n")) != std::string::npos)
 	{
-		std::cout << "handleClientMessage() 3" << std::endl; // DEBUG
+		std::cout << "[DEBUG] handleClientMessage() 3" << std::endl; // DEBUG
 		std::string command = buf.substr(0, pos);
 		buf.erase(0, pos + 2); // eliminar hasta \r\n
 
@@ -286,6 +281,7 @@ void Server::sendToClient(int fd, const std::string &msg)
 // HANDSHAKE: autenticar cliente
 void Server::handshake(Client *cli, const std::string &cmd)
 {
+	std::cout << "[DEBUG] Entrando en handshake" << std::endl;
 	if (cmd.empty())
 		return;
 
@@ -299,7 +295,7 @@ void Server::handshake(Client *cli, const std::string &cmd)
 	// Cliente ya autenticado → salimos
 	if (cli->getStatus() == REGISTERED)
 		return;
-
+	std::cout << "[DEBUG] handshake CAP" << std::endl;
 	// Procesamos comandos de autenticación
 	if (command == "CAP")
 	{
@@ -307,6 +303,7 @@ void Server::handshake(Client *cli, const std::string &cmd)
 	}
 	else if (command == "PASS")
 	{
+		std::cout << "[DEBUG] handshake PASS" << std::endl;
 		handlePass(cli, tokens);
 	}
 	else if (command == "NICK")
@@ -319,6 +316,7 @@ void Server::handshake(Client *cli, const std::string &cmd)
 	}
 	else
 	{
+		std::cout << "[DEBUG] handshake -> 451" << std::endl;
 		sendToClient(cli->getFd(), "451 :You have not registered\r\n");
 	}
 
@@ -441,29 +439,51 @@ void Server::processCommand(Client *cli, const std::string &cmd)
 // del bucle y sale de la funcion aunque no haya actividad en los sockets
 void Server::run()
 {
+	std::cout << "[DEBUG] entra run() por primera vez" << std::endl;
 	while (Server::_signalFlag == false)
 	{
+		std::cout << "[DEBUG] entra en while de run()" << std::endl;
 		int activity = poll(&_fds[0], _fds.size(), -1); // -1 espera indefinidamente
 		if (activity < 0)
-		{
-			if (errno == EINTR) // salida de poll() cuando recibe una signal externa
+		{ //Discrimina si sale por Ctrl+C o por error en poll()
+			if (errno == EINTR) // retorno de poll() si recibe una SIGINT
 				continue;
-			throw std::runtime_error("Error en poll");
+			throw std::runtime_error("Error en poll()");
 		}
-
+//		sleep(1); // DEBUG
 		for (size_t i = 0; i < _fds.size(); ++i)
 		{
+			// if (_fds[i].revents != 0) {
+			// 	std::cout << "[DEBUG] FD " << _fds[i].fd 
+			// 			  << " tiene evento revents=" << _fds[i].revents << "\n";
+			// }
 			if (_fds[i].revents & POLLIN)
 			{
 				if (_fds[i].fd == _server_fd)
 				{ // actividad en el fd del server
+					std::cout << "[DEBUG] hubo un POLLIN en el server_fd de run()" << std::endl;
 					handleNewConnection();
 				}
 				else
 				{ // actividad en algun fd de cliente
+					std::cout << "[DEBUG] hubo un POLLIN en un client_fd de run()" << std::endl;
 					handleClientMessage(i);
 				}
 			}
+//DEBBUG=========================
+			if (_fds[i].revents & (POLLHUP | POLLERR | POLLNVAL))
+			{
+				if (_fds[i].revents & POLLHUP) std::cout << "POLLHUP detected\n";
+				if (_fds[i].revents & POLLERR) std::cout << "POLLERR detected\n";
+				if (_fds[i].revents & POLLNVAL) std::cout << "POLLNVAL detected\n";
+
+				std::cout << "[INFO] Cliente desconectado fd <"
+						  << _fds[i].fd << ">\n";
+				close(_fds[i].fd);
+				_fds.erase(_fds.begin() + i);
+				i--; // importante para no saltarse el siguiente
+			}
+//=======================================			
 		}
 	}
 }
