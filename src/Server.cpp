@@ -28,7 +28,12 @@ Server::Server(const int port, const std::string &password)
 
 // DESTRUCTOR
 Server::~Server() {
-	shutdown();
+	try {
+        shutdown();
+    } catch (const std::exception &e) {
+        std::cerr << "[ERROR] Exception during shutdown in destructor: "
+                  << e.what() << std::endl;
+    }
 }
 
 // INICIALIZA EL SOCKET DEL SERVER, LO PONE EN ESCUCHA Y LO ANAYDE AL VECTOR _fds
@@ -78,30 +83,14 @@ void Server::handleNewConnection() //gestiona las conexiones entrantes una a una
 {
 	struct sockaddr_in client_addr;
 	socklen_t client_len = sizeof(client_addr);
-	std::cout << "[DEBUG] handleNewConnection() 1" << std::endl; // DEBUG
+//	std::cout << "[DEBUG] handleNewConnection() 1" << std::endl; // DEBUG
 	int client_fd = accept(_server_fd, (struct sockaddr *)&client_addr, &client_len);
 	if (client_fd == -1) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) // si no hubo nada que aceptar, vuelve al loop principal (run)
             return;
 		throw std::runtime_error("(!) ERROR: handleNewConnection(): accept()");
     }
-    // POSIBLE REEMPLAZO: acepta todoas las conexiones entrantes de golpe y las va gestionando en el bucle
-    // while (true)
-    // {
-	// 	std::cout << "handleNewConnection() 2" << std::endl; // DEBUG
-    //     int client_fd = accept(_server_fd, (struct sockaddr *)&client_addr, &client_len);
-    //     std::cout << "handleNewConnection() 3" << std::endl; // DEBUG
-	// 	if (client_fd == -1)
-    //     {
-	// 		std::cout << "handleNewConnection() 4" << std::endl; // DEBUG
-    //         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-	// 			std::cout << "handleNewConnection() 5" << std::endl; // DEBUG
-    //             break; // no hay más conexiones pendientes
-	// 		}
-    //         throw std::runtime_error("(!) ERROR: NewConnection: accept()");
-    //     }
-		
-		std::cout << "[DEBUG] handleNewConnection() 6" << std::endl; // DEBUG
+ 
 		setNonBlockingOrExit(client_fd); // Si falla salta una exception
 		
 		// AÑADO struct pollfd DEL NEW CLIENT AL VECTOR _fds
@@ -111,10 +100,8 @@ void Server::handleNewConnection() //gestiona las conexiones entrantes una a una
 		client_pollfd.revents = 0;
 		_fds.push_back(client_pollfd);
 
-		std::cout << "[DEBUG] handleNewConnection() 7" << std::endl; // DEBUG
-
 		// CREA OBJ Client Y LO ANYADE AL MAP _clients
-		//////////////_clients[client_fd] = Client(client_fd);
+		//_clients[client_fd] = Client(client_fd);
 		// forma alternativa de construir el obj directamente en el map
 		_clients.insert(std::pair<int, Client>(client_fd, Client(client_fd)));
 		
@@ -135,13 +122,12 @@ Client *Server::getClient(int fd) {
 
 // MANEJA CONEXIONES AL SERVER DE LOS fd CONOCIDOS (MENSAJES)
 void Server::handleClientMessage(size_t i) {
-	std::cout << "[DEBUG] handleClientMessage() 1" << std::endl; //DEBUG
+//	std::cout << "[DEBUG] handleClientMessage() 1" << std::endl; //DEBUG
 	int fd = _fds[i].fd;
 	char buffer[1024]; // pueden llegar comandos concatenados, fragmentados, ya procesaremos luego en parser segun protocol IRC.
 	std::memset(buffer, 0, sizeof(buffer));
 
 	ssize_t bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
-	//=================================================
 
 	if (bytes == 0) {
 		// Cliente cerró conexión
@@ -159,14 +145,6 @@ void Server::handleClientMessage(size_t i) {
 		}
 	}
 
-	//===============================================
-
-	// if (bytes <= 0){  // cliente cerro la conexion o error de lectura
-	// 	std::cout << "handleClientMessage() 2" << std::endl; // DEBUG
-	// 	disconnectClient(fd); // un solo punto de desconexión
-	// 	return;
-	// }
-
 	// Recuperar el cliente desde el map
 	Client *cli = getClient(fd);
 	if (cli == NULL)
@@ -181,16 +159,16 @@ void Server::handleClientMessage(size_t i) {
 
 	while ((pos = buf.find("\r\n")) != std::string::npos)
 	{
-		std::cout << "[DEBUG] handleClientMessage() 3" << std::endl; // DEBUG
+//		std::cout << "[DEBUG] handleClientMessage() 3" << std::endl; // DEBUG
 		std::string command = buf.substr(0, pos);
 		buf.erase(0, pos + 2); // eliminar hasta \r\n
 
 		if (!command.empty())
 		{
-			std::cout << "Client fd <" << fd << "> Command: "
+//			std::cout << "<" << new_cli_fd << "> " << RED << ">> " << RESET << msg;
+			std::cout << "<" << fd << "> " << RED << "<< " << RESET 
 					  << command << std::endl;
 
-			// Delegar al parser del protocolo IRC
 			processCommand(cli, command);
 		}
 	}
@@ -199,43 +177,74 @@ void Server::handleClientMessage(size_t i) {
 
 void Server::disconnectClient(int client_fd)
 {
-	// Cerrar el socket
-	close(client_fd);
+    // Eliminar del map de clientes
+    std::map<int, Client>::iterator it_map = _clients.find(client_fd);
+    if (it_map != _clients.end())
+    {
+        std::cout << "[INFO] Client fd <" << client_fd << "> removed from map _clients" << std::endl;
+        _clients.erase(it_map);
+    }
 
-	// Eliminar del map de _clients
-	std::map<int, Client>::iterator it = _clients.find(client_fd);
-	if (it != _clients.end())
-	{
-//		std::cout << "Client fd <" << client_fd << "> disconnected" << std::endl;
-		std::cout << "[INFO] Client fd <" << client_fd << "> removed from map _clients" << std::endl;
-		_clients.erase(it);
-	}
+    // Eliminar del vector de pollfds
+    for (std::vector<struct pollfd>::iterator it = _fds.begin(); it != _fds.end(); )
+    {
+        if (it->fd == client_fd)
+        {
+            std::cout << "[INFO] Client fd <" << client_fd << "> removed from vector _fds" << std::endl;
+            it = _fds.erase(it); // erase devuelve el siguiente iterador
+            break; // sólo hay un fd con ese valor
+        }
+        else
+        {
+            ++it;
+        }
+    }
 
-	// Eliminar del vector de pollfds _fds
-	for (std::vector<struct pollfd>::iterator it = _fds.begin(); it != _fds.end(); ++it)
-	{
-		if (it->fd == client_fd)
-		{
-			std::cout << "[INFO] Client fd <" << client_fd << "> removed from vector _fds" << std::endl;
-			_fds.erase(it);
-			break; // importante, sino se invalida el iterador
-		}
-	}
+    // Finalmente, cerrar el socket
+    if (close(client_fd) == -1)
+    {
+        std::cerr << "[WARN] Error closing fd <" << client_fd << ">: "
+                  << strerror(errno) << std::endl;
+    }
+    else
+    {
+        std::cout << "[INFO] Client fd <" << client_fd << "> closed" << std::endl;
+    }
 }
 
+//Cierra todo limpiamente, 
 void Server::shutdown()
 {
-	// cerrar clientes
-	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
-	{
-		close(it->first);
-	}
-	_clients.clear();
-	_fds.clear();
-	std::cout << "\n[INFO] Server shutdown gracefully" << std::endl;
+    std::cout << "\n[INFO] Shutting down server..." << std::endl;
+
+    // Desconecta todos los clientes usando disconnectClient()
+    while (!_clients.empty())
+    {
+        int client_fd = _clients.begin()->first;
+        disconnectClient(client_fd);
+    }
+
+    // Cierra el socket del servidor (si existe en _fds[0])
+    if (!_fds.empty())
+    {
+        int server_fd = _fds[0].fd;
+        if (close(server_fd) == -1)
+        {
+            std::cerr << "[WARN] Error closing server fd <" << server_fd << ">: "
+                      << strerror(errno) << std::endl;
+        }
+        else
+        {
+            std::cout << "[INFO] Server fd <" << server_fd << "> closed" << std::endl;
+        }
+    }
+
+    // Limpia la estructura de poll()
+    _fds.clear();
+
+    std::cout << "[INFO] Server shutdown gracefully" << std::endl;
 }
 
-//=============================================
 
 // Helper para dividir un string en tokens
 std::vector<std::string> split(const std::string &str, char delim)
@@ -248,6 +257,7 @@ std::vector<std::string> split(const std::string &str, char delim)
 	return tokens;
 }
 
+
 void Server::sendToClient(int fd, const std::string &msg)
 {
 	if (fd < 0 || msg.empty())
@@ -259,6 +269,7 @@ void Server::sendToClient(int fd, const std::string &msg)
 	while (totalSent < msgLen)
 	{
 		ssize_t sent = ::send(fd, msg.c_str() + totalSent, msgLen - totalSent, 0);
+		//FALTARIA AQUI: IMPRIMIR EL ENVIO EN LA CONSOLA
 		if (sent > 0) {
 			totalSent += sent;
 		} 
@@ -280,10 +291,9 @@ void Server::sendToClient(int fd, const std::string &msg)
 
 }
 
-// HANDSHAKE: autenticar cliente
+// HANDSHAKE: autentica al cliente
 void Server::handshake(Client *cli, const std::string &cmd)
 {
-	std::cout << "[DEBUG] Entrando en handshake" << std::endl;
 	if (cmd.empty())
 		return;
 
@@ -297,31 +307,24 @@ void Server::handshake(Client *cli, const std::string &cmd)
 	// Cliente ya autenticado → salimos
 	if (cli->getStatus() == REGISTERED)
 		return;
-	std::cout << "[DEBUG] handshake CAP" << std::endl;
+
 	// Procesamos comandos de autenticación
-	if (command == "CAP")
+	if (command == "CAP" && cli->getStatus() == NOT_AUTHENTICATED)
 	{
 		handleCap(cli); //, tokens);
 	}
-	else if (command == "PASS")
+	if (command == "PASS" && cli->getStatus() == CAP_NEGOTIATED)
 	{
-		std::cout << "[DEBUG] handshake PASS" << std::endl;
 		handlePass(cli, tokens);
 	}
-	else if (command == "NICK")
+	if (command == "NICK" && cli->getStatus() == PASS_OK)
 	{
 		handleNick(cli, tokens);
 	}
-	else if (command == "USER")
+	if (command == "USER" && cli->getStatus() == NICK_OK)
 	{
 		handleUser(cli, tokens);
 	}
-	else
-	{
-		std::cout << "[DEBUG] handshake -> 451" << std::endl;
-		sendToClient(cli->getFd(), "451 :You have not registered\r\n");
-	}
-
 	// Si el cliente llega a USER_OK → lo marcamos como REGISTERED
 	if (cli->getStatus() == USER_OK)
 	{
@@ -330,6 +333,11 @@ void Server::handshake(Client *cli, const std::string &cmd)
 		std::cout << "Client fd=" << cli->getFd()
 				  << " registered as " << cli->getNick() << std::endl;
 	}
+	else
+	{
+		sendToClient(cli->getFd(), "451 :You have not registered\r\n");
+	}
+
 }
 
 void Server::handleCap(Client *cli) //, const std::vector<std::string> &tokens)
@@ -343,8 +351,8 @@ void Server::handleCap(Client *cli) //, const std::vector<std::string> &tokens)
           << " LS :\r\n";
 
     sendToClient(cli->getFd(), reply.str());
+	cli->setStatus(CAP_NEGOTIATED);
 }
-
 
 void Server::handlePass(Client *cli, const std::vector<std::string> &tokens)
 {
@@ -357,7 +365,7 @@ void Server::handlePass(Client *cli, const std::vector<std::string> &tokens)
 	if (tokens[1] == this->_password)
 	{
 		cli->setStatus(PASS_OK);
-		std::cout << "PASS accepted" << std::endl;
+		std::cout << "[DEBUG] PASS accepted" << std::endl;
 	}
 	else
 	{
@@ -373,19 +381,20 @@ void Server::handleNick(Client *cli, const std::vector<std::string> &tokens)
 		return;
 	}
 
-	// No se si deberiamos validar si el NICK ya existe ??????
+	// Deberiamos validar si el NICK ya existe ??????
 
 	cli->setNick(tokens[1]);
 
-	if (cli->getStatus() == PASS_OK)
+	if (cli->getStatus() == PASS_OK) {
+		std::cout << "[DEBUG] NICK set to " << tokens[1] << std::endl;
 		cli->setStatus(NICK_OK);
+	}
 
-	std::cout << "NICK set to " << tokens[1] << std::endl;
 }
 
 void Server::handleUser(Client *cli, const std::vector<std::string> &tokens)
 {
-	if (tokens.size() < 2) // OJO hay 4 tokens !!!!!!
+	if (tokens.size() < 4) // OJO aqui hay al menos 4 tokens !!!!!!
 	{
 		sendToClient(cli->getFd(), "461 USER :Not enough parameters\r\n");
 		return;
@@ -395,10 +404,10 @@ void Server::handleUser(Client *cli, const std::vector<std::string> &tokens)
 
 	if (cli->getStatus() == NICK_OK)
 	{
+		std::cout << "[DEBUG] USER set to " << tokens[1] << std::endl;
 		cli->setStatus(USER_OK);
 	}
 
-	std::cout << "USER set to " << tokens[1] << std::endl;
 }
 
 // PARSE COMMAND: clientes ya autenticados
@@ -407,7 +416,7 @@ void Server::processCommand(Client *cli, const std::string &cmd)
 	if (cli->getStatus() != REGISTERED)
 	{
 		handshake(cli, cmd); // si no está logueado, pasamos por el handshake
-		return;
+//		return;  OJO VERIFICAR SI VA EL RETURN
 	}
 
 	if (cmd.empty())
@@ -441,10 +450,10 @@ void Server::processCommand(Client *cli, const std::string &cmd)
 // del bucle y sale de la funcion aunque no haya actividad en los sockets
 void Server::run()
 {
-	std::cout << "[DEBUG] entra run() por primera vez" << std::endl;
+//	std::cout << "[DEBUG] entra run() por primera vez" << std::endl;
 	while (Server::_signalFlag == false)
 	{
-		std::cout << "[DEBUG] entra en while de run()" << std::endl;
+//		std::cout << "[DEBUG] entra en while de run()" << std::endl;
 		int activity = poll(&_fds[0], _fds.size(), -1); // -1 espera indefinidamente
 		if (activity < 0)
 		{ //Discrimina si sale por Ctrl+C o por error en poll()
@@ -452,11 +461,10 @@ void Server::run()
 				continue;
 			throw std::runtime_error("Error en poll()");
 		}
-//		sleep(1); // DEBUG
 
 		if (_fds[0].revents & POLLIN)
 		{ // actividad en el fd del server
-			std::cout << "[DEBUG] POLLIN en el server_fd de run()" << std::endl;
+//			std::cout << "[DEBUG] POLLIN en el server_fd de run()" << std::endl;
 			handleNewConnection();
 		}
 		for (size_t i = 1; i < _fds.size(); ++i) // Busca los clientes con actividad
@@ -472,59 +480,16 @@ void Server::run()
 
 				int client_fd = _fds[i].fd;
 				disconnectClient(client_fd);
-
-				//				close(_fds[i].fd); // cierra y libera el socket
-				//				_fds.erase(_fds.begin() + i); // lo borra del vector _fds
-				//				//DEBERIA ELIMINARLO DEL MAP DE _clients  ??????
 				i--; // importante para no saltarse el siguiente
 			}
 
-			if (_fds[i].revents & POLLIN)
-			{ // hubo actividad en algun fd de cliente
-				std::cout << "[DEBUG] hubo un POLLIN en un client_fd de run()" << std::endl;
+			if (_fds[i].revents & POLLIN) { // hubo actividad en algun fd de cliente
 				handleClientMessage(i);
 			}
 		}
 	}
 }
-
-
-//=====================================
-/*	
-		for (size_t i = 0; i < _fds.size(); ++i)
-		{
-			// if (_fds[i].revents != 0) {
-			// 	std::cout << "[DEBUG] FD " << _fds[i].fd 
-			// 			  << " tiene evento revents=" << _fds[i].revents << "\n";
-			// }
-			if (_fds[i].revents & POLLIN)
-			{
-				if (_fds[i].fd == _server_fd)
-				{ // actividad en el fd del server
-					std::cout << "[DEBUG] hubo un POLLIN en el server_fd de run()" << std::endl;
-					handleNewConnection();
-				}
-				else
-				{ // actividad en algun fd de cliente
-					std::cout << "[DEBUG] hubo un POLLIN en un client_fd de run()" << std::endl;
-					handleClientMessage(i);
-				}
-			}
-//DEBBUG=========================
-
-			if (_fds[i].revents & (POLLHUP | POLLERR | POLLNVAL))
-			{
-				if (_fds[i].revents & POLLHUP) std::cout << "POLLHUP detected\n";
-				if (_fds[i].revents & POLLERR) std::cout << "POLLERR detected\n";
-				if (_fds[i].revents & POLLNVAL) std::cout << "POLLNVAL detected\n";
-
-				std::cout << "[INFO] Cliente desconectado fd <"
-						  << _fds[i].fd << ">\n";
-				close(_fds[i].fd);
-				_fds.erase(_fds.begin() + i);
-				i--; // importante para no saltarse el siguiente
-			}
-//======================================= */			
+	
 
 // SIGNALS
 // Definicion e inicializacion, fuera de la clase.

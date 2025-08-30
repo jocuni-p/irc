@@ -3,14 +3,6 @@
 #include <csignal> // sig_atomic_t
 #include "../include/Server.hpp"
 
-//volatile sig_atomic_t g_running = 1; //Var global aceptado por c++98 para manejo de las senyales (controla el bucle de run)
-
-
-// static void signalHandler(int signum) { // recogera realmente la senyal????
-//     g_running = 0; // Fuerza la salida del loop del server
-// }
-
-
 int main(int argc, char **argv) {
 
 	int port;
@@ -43,7 +35,6 @@ int main(int argc, char **argv) {
 
 		irc.run(); // bucle de aceptacion conexiones
 
-//		std::cout << " Server shutdown gracefully" << std::endl;
 		return 0; //Deberia salir por aqui si se hace un Ctrl+C y se maneja adecuadamente la senyal
 	}
 	catch (const std::exception &e)

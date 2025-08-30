@@ -8,8 +8,8 @@ Client::Client(int fd) : _fd(fd), _status(NOT_AUTHENTICATED) {}
 
 //DESTRUCTOR
 Client::~Client() {
-	if (_fd != -1)
-		close(_fd);
+	// if (_fd != -1)
+		// close(_fd);
 }
 
 // --- Getters / Setters básicos ---

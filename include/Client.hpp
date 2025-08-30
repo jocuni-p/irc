@@ -7,6 +7,7 @@
 
 enum LoginStatus {
     NOT_AUTHENTICATED,
+	CAP_NEGOTIATED,
     PASS_OK,
     NICK_OK,
     USER_OK,
