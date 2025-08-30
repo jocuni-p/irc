@@ -1,5 +1,5 @@
 
-#include "Server.hpp"
+#include "../include/Server.hpp"
 #include <cstring>
 #include <sstream>
 #include <cstdlib>
@@ -206,7 +206,8 @@ void Server::disconnectClient(int client_fd)
 	std::map<int, Client>::iterator it = _clients.find(client_fd);
 	if (it != _clients.end())
 	{
-		std::cout << "Client fd <" << client_fd << "> disconnected" << std::endl;
+//		std::cout << "Client fd <" << client_fd << "> disconnected" << std::endl;
+		std::cout << "[INFO] Client fd <" << client_fd << "> removed from map _clients" << std::endl;
 		_clients.erase(it);
 	}
 
@@ -215,6 +216,7 @@ void Server::disconnectClient(int client_fd)
 	{
 		if (it->fd == client_fd)
 		{
+			std::cout << "[INFO] Client fd <" << client_fd << "> removed from vector _fds" << std::endl;
 			_fds.erase(it);
 			break; // importante, sino se invalida el iterador
 		}
@@ -451,6 +453,44 @@ void Server::run()
 			throw std::runtime_error("Error en poll()");
 		}
 //		sleep(1); // DEBUG
+
+		if (_fds[0].revents & POLLIN)
+		{ // actividad en el fd del server
+			std::cout << "[DEBUG] POLLIN en el server_fd de run()" << std::endl;
+			handleNewConnection();
+		}
+		for (size_t i = 1; i < _fds.size(); ++i) // Busca los clientes con actividad
+		{
+			if (_fds[i].revents & (POLLHUP | POLLERR | POLLNVAL))
+			{
+				if (_fds[i].revents & POLLHUP) std::cout << "[DEBUG] POLLHUP detected\n";
+				if (_fds[i].revents & POLLERR) std::cout << "[DEBUG] POLLERR detected\n";
+				if (_fds[i].revents & POLLNVAL) std::cout << "[DEBUG] POLLNVAL detected\n";
+
+				std::cout << "[INFO] Cliente desconectado fd <"
+						  << _fds[i].fd << ">\n";
+
+				int client_fd = _fds[i].fd;
+				disconnectClient(client_fd);
+
+				//				close(_fds[i].fd); // cierra y libera el socket
+				//				_fds.erase(_fds.begin() + i); // lo borra del vector _fds
+				//				//DEBERIA ELIMINARLO DEL MAP DE _clients  ??????
+				i--; // importante para no saltarse el siguiente
+			}
+
+			if (_fds[i].revents & POLLIN)
+			{ // hubo actividad en algun fd de cliente
+				std::cout << "[DEBUG] hubo un POLLIN en un client_fd de run()" << std::endl;
+				handleClientMessage(i);
+			}
+		}
+	}
+}
+
+
+//=====================================
+/*	
 		for (size_t i = 0; i < _fds.size(); ++i)
 		{
 			// if (_fds[i].revents != 0) {
@@ -471,6 +511,7 @@ void Server::run()
 				}
 			}
 //DEBBUG=========================
+
 			if (_fds[i].revents & (POLLHUP | POLLERR | POLLNVAL))
 			{
 				if (_fds[i].revents & POLLHUP) std::cout << "POLLHUP detected\n";
@@ -483,10 +524,7 @@ void Server::run()
 				_fds.erase(_fds.begin() + i);
 				i--; // importante para no saltarse el siguiente
 			}
-//=======================================			
-		}
-	}
-}
+//======================================= */			
 
 // SIGNALS
 // Definicion e inicializacion, fuera de la clase.

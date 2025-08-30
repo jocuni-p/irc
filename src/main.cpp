@@ -1,7 +1,7 @@
 
 #include <iostream>
 #include <csignal> // sig_atomic_t
-#include "Server.hpp"
+#include "../include/Server.hpp"
 
 //volatile sig_atomic_t g_running = 1; //Var global aceptado por c++98 para manejo de las senyales (controla el bucle de run)
 
