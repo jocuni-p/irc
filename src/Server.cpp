@@ -144,7 +144,16 @@ void Server::handleClientMessage(size_t i) {
 			return;
 		}
 	}
-
+/*
+	//===========SOLO PARA DEBBUGAR EL MENSAJE=======
+	// --- Añadir aquí: imprimir todo lo recibido aunque no tenga \r\n ---
+	if (bytes > 0) {
+    	std::string raw_msg(buffer, bytes);
+    	std::cout << "<" << fd << "> " << RED << "<< " << RESET
+        		<< raw_msg << std::endl;
+	}
+	//=================================================
+*/
 	// Recuperar el cliente desde el map
 	Client *cli = getClient(fd);
 	if (cli == NULL)
@@ -413,6 +422,7 @@ void Server::handleUser(Client *cli, const std::vector<std::string> &tokens)
 // PARSE COMMAND: clientes ya autenticados
 void Server::processCommand(Client *cli, const std::string &cmd)
 {
+	std::cout << "[DEBUG] processCommand()" << std::endl;
 	if (cli->getStatus() != REGISTERED)
 	{
 		handshake(cli, cmd); // si no está logueado, pasamos por el handshake
