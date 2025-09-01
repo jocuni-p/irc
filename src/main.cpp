@@ -1,4 +1,5 @@
 #include "../include/Server.hpp"
+#include "../include/Utils.hpp"
 
 int main(int argc, char **argv)
 {
@@ -8,25 +9,35 @@ int main(int argc, char **argv)
     if (argc != 3)
     {
         std::cerr << "Usage: ./ircserv <port> <password>" << std::endl;
-        return (1);
+        return 1;
     }
 
     int port = atoi(argv[1]);
-    std::string password = argv[2];
+	if (!Utils::isValidPortArg(port)) {
+		std::cerr << "Failure: Recommended port for a non encrypted IRC: 6667" << std::endl;
+		return 1;
+	}
 
-    Server server;
-    std::cout << "---- IRC SERVER ----" << std::endl;
+	std::string password = argv[2];
+	if (!Utils::isValidPasswordArg(password)) {
+		std::cerr 	<< "Failure: invalid port '" << argv[1]
+          			<< "'. Recommended port for non-encrypted IRC: 6667" << std::endl;
+		return 1;
+	}
 
-    try
-    {
-//        signal(SIGINT, Server::signalHandler);
-//        signal(SIGQUIT, Server::signalHandler);
-        server.serverInit(port, password);
-    }
+		Server server;
+
+	try
+	{
+		server.serverInit(port, password);
+		//PROVAR LAS SENYALS Y LA SEVA SORTIDA
+	}
     catch (const std::exception &e)
     {
-        server.closeFds();
+        server.closeFds(); // CONTRASTAR CON shutdown()
         std::cerr << e.what() << std::endl;
-    }
-    std::cout << "The Server Closed!" << std::endl;
+		return 1;
+	}
+	std::cout << "The Server Closed!" << std::endl;
+	return 0;
 }

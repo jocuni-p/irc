@@ -21,6 +21,7 @@
 #include "Channel.hpp"
 #include "Client.hpp"
 
+#define RESET   "\033[0m"
 #define RED "\e[1;31m"
 #define WHI "\e[0;37m"
 #define GRE "\e[1;32m"
@@ -35,9 +36,9 @@ private:
     static bool                     _signalFlag;
     std::vector<Client>             _clients;
     std::vector<struct pollfd>      _fds;
-    std::map<std::string, Channel>  _channels;
+	//    std::map<std::string, Channel> 	_channels; // nombre -> Channel
 
-    Channel& getOrCreateChannel(const std::string& name);
+//    Channel& getOrCreateChannel(const std::string& name);
 
     // Helpers / parser
     Client* getClient(int fd);
@@ -64,7 +65,11 @@ public:
     void clearClient(int fd);
   //void sendToClient(Client& client, const std::string& message);
 
+  // Utilities
     static void signalHandler(int signum);
+//	static bool isValidPasswordArg(const std::string &pass);
+//	static bool isValidPortArg(const int &port);
+
 };
 
 #endif

@@ -3,14 +3,23 @@
 
 bool Server::_signalFlag = false;
 
+void Server::signalHandler(int signum)
+{
+    (void)signum;
+//    std::cout << std::endl << "Signal Received!" << std::endl;
+    Server::_signalFlag = true;
+}
+
+// CONSTRUCTOR POR DEFECTO
 Server::Server() : _port(0), _serverFd(-1) {}
 
+/*
 void Server::signalHandler(int signum)
 {
     (void)signum;
     std::cout << std::endl << "Signal Received!" << std::endl;
     Server::_signalFlag = true;
-}
+}*/
 
 void Server::clearClient(int fd)
 {
@@ -104,42 +113,51 @@ void Server::createSocket()
     struct sockaddr_in add;
     struct pollfd newPoll;
 
+	// INICIALIZA STRUCT DEL SOCKET (asigna IP, PORT y escucha a cualquier ip))
     add.sin_family = AF_INET;
     add.sin_addr.s_addr = INADDR_ANY;
     add.sin_port = htons(this->_port);
 
+	// CREA EL SOCKET
     _serverFd = socket(AF_INET, SOCK_STREAM, 0);
     if (_serverFd == -1)
         throw(std::runtime_error("faild to create socket"));
 
+		// CONF LIBERACION RAPIDA DEL PUERTO
     if (setsockopt(_serverFd, SOL_SOCKET, SO_REUSEADDR, &en, sizeof(en)) == -1)
         throw(std::runtime_error("faild to set option (SO_REUSEADDR) on socket"));
 
+	// HACE NO BLOQUEANTE AL SOCKET
     if (fcntl(_serverFd, F_SETFL, O_NONBLOCK) == -1)
         throw(std::runtime_error("faild to set option (O_NONBLOCK) on socket"));
 
+	// ENLAZA el socket a su struct de datos(socket <-> IP + PORT)
     if (bind(_serverFd, (struct sockaddr *)&add, sizeof(add)) == -1)
         throw(std::runtime_error("faild to bind socket"));
 
+	// PONE EN ESCUCHA EL PUERTO del socket (fd, num conexiones max admitidas en SO)
     if (listen(_serverFd, SOMAXCONN) == -1)
-        throw(std::runtime_error("listen() failed"));
+        throw(std::runtime_error("listen() on server failed"));
 
+	// CONFIG y AÑADE struct pollfd DEL SERVER al vector<> _fds
     newPoll.fd = _serverFd;
     newPoll.events = POLLIN;
     newPoll.revents = 0;
     _fds.push_back(newPoll);
+
 }
 
 void Server::serverInit(int port, std::string& pwd)
 {
-    this->_port = port;
+	this->_port = port;
     this->_password = pwd;
+	//VALIDAR INPUTS
     createSocket();
+	
+	std::cout << "** Server IRC created **" << std::endl;
+	std::cout << "** Listening on port <" << this->_port << "> **" << std::endl;
 
-    std::cout << GRE << "Server <" << _serverFd << "> Connected" << WHI << std::endl;
-    std::cout << "Waiting to accept a connection...\n";
-
-    while (Server::_signalFlag == false)
+	while (Server::_signalFlag == false)
     {
         if ((poll(&_fds[0], _fds.size(), -1) == -1) && Server::_signalFlag == false)
             throw(std::runtime_error("poll() failed"));
@@ -158,7 +176,6 @@ void Server::serverInit(int port, std::string& pwd)
     closeFds();
 }
 
-/************************* New Functions **************************/
 
 Client *Server::getClient(int fd)
 {
@@ -312,9 +329,9 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
     else if (command == "JOIN") {
         handleJoin(cli, tokens);
     }
-    else if (command == "PRIVMSG") {
-        handlePrivmsg(cli, tokens);
-    }
+    // else if (command == "PRIVMSG") {
+    //     handlePrivmsg(cli, tokens);
+    // }
     else {
         std::cout << RED << "Unknown command: " << cmd << WHI << std::endl;
         // Aquí luego podemos enviar un error al cliente
@@ -443,12 +460,13 @@ void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
     tryRegister(*cli);
 }
 
-
-/*void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
+//OJO solo para pruebas de joan
+void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
 {
     (void)cli;
     std::cout << tokens[0] << " command received" << std::endl;
-}*/
+}
+/*
 void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
 {
     if (tokens.empty())
@@ -485,13 +503,15 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
             }
         }
     }
-}
-
-/*void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
+}*/
+	
+//Temporal solo para pruebas de joan
+void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
 {
     (void)cli;
     std::cout << tokens[0] << " command received" << std::endl;
-}*/
+}
+/*
 void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
 {
     // 1. Validar parámetros
@@ -542,7 +562,7 @@ void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
         }
 
         // reenviar a todos los clientes del canal excepto el emisor
-        /*const std::set<int>& members = chan.getClients();
+		const std::set<int>& members = chan.getClients();
 
         for (std::set<int>::iterator mit = members.begin(); mit != members.end(); ++mit)
         {
@@ -551,7 +571,8 @@ void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
             {
                 sendToClient(memberFd, ":" + sender->getNick() + " PRIVMSG " + target + " :" + message + "\r\n");
             }
-        }*/
+        }
+
         
         // reenviar a todos los clientes del canal excepto el emisor
         const std::set<int>& members = chan.getClients();
@@ -579,6 +600,7 @@ void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
         sendToClient(*targetClient, ":" + cli->getNickname() + " PRIVMSG " + target + " :" + message + "\r\n");
     }
 }
+*/
 
 Client* Server::getClientByNick(const std::string& nick)
 {
@@ -639,7 +661,7 @@ void Server::sendToClient(Client& client, const std::string& message)
     }
 }
 
-
+/*
 Channel& Server::getOrCreateChannel(const std::string& name)
 {
     std::map<std::string, Channel>::iterator it = _channels.find(name);
@@ -651,3 +673,4 @@ Channel& Server::getOrCreateChannel(const std::string& name)
     }
     return it->second;
 }
+	*/
