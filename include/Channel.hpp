@@ -2,23 +2,26 @@
 #define CHANNEL_HPP
 
 #include <string>
-#include <map>
-#include "Client.hpp"
+#include <set>
 
 class Channel {
 private:
     std::string _name;
-    std::map<int, Client*> _members; // fd -> Client*
+    std::set<int> _clients;   // fds de clientes
+    std::set<int> _operators; // fds de operadores
 
 public:
-    Channel();
     Channel(const std::string& name);
-    ~Channel();
 
-    std::string getName() const;
-    void addMember(Client* client);
-    void removeMember(int fd);
+    const std::string& getName() const;
+
+    // gestión de miembros
+    bool addClient(int fd, bool isOperator = false);
+    void removeClient(int fd);
+    bool isMember(int fd) const;
+    bool isOperator(int fd) const;
+
+    const std::set<int>& getClients() const;
 };
 
 #endif
-

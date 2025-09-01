@@ -1,60 +1,70 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
-#include <iostream>
-#include <map>
-#include <vector>
-#include <string>
 #include <cstdlib>
+#include <cstring>
+#include <csignal>
+#include <cctype> // para toupper
+#include <cerrno>
+#include <iostream>
+#include <sstream>
+#include <vector>
 #include <stdexcept>
+#include <string>
 #include <poll.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
-#include "Client.hpp"
+#include <unistd.h>
+#include <fcntl.h>
+#include <arpa/inet.h>
+#include <map>
 #include "Channel.hpp"
+#include "Client.hpp"
+
+#define RED "\e[1;31m"
+#define WHI "\e[0;37m"
+#define GRE "\e[1;32m"
+#define YEL "\e[1;33m"
 
 class Server
 {
 private:
-	// Config
-	const int _port;
-	const std::string _password;
+    int                             _port;
+    int                             _serverFd;
+    std::string                     _password;
+    static bool                     _signalFlag;
+    std::vector<Client>             _clients;
+    std::vector<struct pollfd>      _fds;
+    std::map<std::string, Channel>  _channels;
 
-	// Socket
-	int _server_fd;
-	struct sockaddr_in _server_addr; // struct del sistema, contiene IP y puerto del socket
+    Channel& getOrCreateChannel(const std::string& name);
 
-	// Execution
-	static bool _signalFlag; // para detectar las senyales
-	std::vector<struct pollfd> _fds;
-	std::map<int, Client> _clients; // fd -> Client
-//    std::map<std::string, Channel> 	_channels; // nombre -> Channel
+    // Helpers / parser
+    Client* getClient(int fd);
+    Client* getClientByNick(const std::string& nick);
+    void parseCommand(Client* cli, const std::string& cmd);
+    void tryRegister(Client& client);
 
-	void initSocket();
-	void handleNewConnection();
-	void handleClientMessage(size_t i);
-	Client *getClient(int fd);
-	void disconnectClient(int client_fd);
-	void shutdown(); // Limpia todo correctamente
+    // Handlers de comandos
+    void handlePass(Client* cli, const std::vector<std::string>& tokens);
+    void handleNick(Client* cli, const std::vector<std::string>& tokens);
+    void handleUser(Client* cli, const std::vector<std::string>& tokens);
+    void handleJoin(Client* cli, const std::vector<std::string>& tokens);
+    void handlePrivmsg(Client* cli, const std::vector<std::string>& tokens);
 
-	void sendToClient(int fd, const std::string &msg);
-	void handshake(Client *cli, const std::string &cmd);
-	void processCommand(Client *cli, const std::string &cmd);
-	void handlePass(Client *cli, const std::vector<std::string> &tokens);
-	void handleNick(Client *cli, const std::vector<std::string> &tokens);
-	void handleUser(Client *cli, const std::vector<std::string> &tokens);
-	void handleJoin(Client *cli, const std::vector<std::string> &tokens);
-	void handlePrivmsg(Client *cli, const std::vector<std::string> &tokens);
+    void sendToClient(Client& client, const std::string& message);
 
 public:
-	Server(int port, const std::string &password);
-	~Server();
+    Server();
+    void serverInit(int port, std::string& pwd);
+    void createSocket();
+    void acceptNewClient();
+    void receiveNewData(int fd);
+    void closeFds();
+    void clearClient(int fd);
+  //void sendToClient(Client& client, const std::string& message);
 
-	void run(); // bucle de poll()
-
-	// Utilities
-	static bool isValidPasswordArg(const std::string &pass);
-	static bool isValidPortArg(const int &port);
-	static void signalHandler(int signum);
+    static void signalHandler(int signum);
 };
 
 #endif

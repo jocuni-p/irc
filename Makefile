@@ -11,8 +11,8 @@ OBJ_DIR = obj
 # Source files
 SRCS = $(SRC_DIR)/main.cpp \
        $(SRC_DIR)/Server.cpp \
-       $(SRC_DIR)/Client.cpp
-#       $(SRC_DIR)/Channel.cpp
+       $(SRC_DIR)/Client.cpp \
+       $(SRC_DIR)/Channel.cpp
 
 # Object files
 OBJS = $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
