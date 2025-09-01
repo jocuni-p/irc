@@ -1,4 +1,4 @@
-#include "Client.hpp"
+#include "../include/Client.hpp"
 
 Client::Client() : _fd(-1), _passAccepted(false), _authenticated(false) {}
 Client::~Client() {}

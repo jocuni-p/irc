@@ -42,7 +42,7 @@ re: fclean all
 
 # Ejecutar el servidor con parámetros de prueba
 run: $(NAME)
-	./$(NAME) 6667 password
+	./$(NAME) 6667 123456
 
 # Prevent conflicts with files named like our targets
 .PHONY: all clean fclean re run
