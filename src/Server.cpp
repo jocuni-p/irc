@@ -13,100 +13,142 @@ void Server::signalHandler(int signum)
 // CONSTRUCTOR POR DEFECTO
 Server::Server() : _port(0), _serverFd(-1) {}
 
-/*
-void Server::signalHandler(int signum)
-{
-    (void)signum;
-    std::cout << std::endl << "Signal Received!" << std::endl;
-    Server::_signalFlag = true;
-}*/
 
+// Elimina un cliente de vector _fds y de _clients
 void Server::clearClient(int fd)
 {
-    for (size_t i = 0; i < _fds.size(); i++)
-    {
-        if (_fds[i].fd == fd)
-        {
+    // Cierra primero, ignora errores
+    if (fd >= 0) {
+        shutdown(fd, SHUT_RDWR); // mejor esfuerzo; ignora error si ya está cerrado
+        close(fd);
+    }
+
+    // Borra de _fds
+    for (size_t i = 0; i < _fds.size(); ++i) {
+        if (_fds[i].fd == fd) {
             _fds.erase(_fds.begin() + i);
-            break ;
+            break;
         }
     }
-    for (size_t i = 0; i < _clients.size(); i++)
-    {
-        if (_clients[i].getFd() == fd)
-        {
+    // Borra de _clients
+    for (size_t i = 0; i < _clients.size(); ++i) {
+        if (_clients[i].getFd() == fd) {
             _clients.erase(_clients.begin() + i);
-            break ;
+            break;
         }
     }
 }
+
+
+// void Server::closeFds()
+// {
+//     for (size_t i = 0; i < _clients.size(); i++)
+//     {
+//         std::cout << "<" << _clients[i].getFd() << "> Disconnected" << std::endl;// DEBUG
+//         close(_clients[i].getFd());
+//     }
+//     if (_serverFd != -1)
+//     {
+//         std::cout << "Server <" << _serverFd << "> Disconnected" << std::endl; // DEBUG
+//         close(_serverFd);
+//     }
+// 	std::cout << "** IRC Server shutdown gracefully **" << std::endl;
+// }
 
 void Server::closeFds()
 {
-    for (size_t i = 0; i < _clients.size(); i++)
-    {
-        std::cout << RED << "Client <" << _clients[i].getFd() << "> Disconnected" << WHI << std::endl;
-        close(_clients[i].getFd());
+    // Cierra clientes (forma limpia)
+    for (size_t i = 0; i < _clients.size(); ++i) {
+        int cfd = _clients[i].getFd();
+        if (cfd >= 0) {
+            std::cout << "<" << cfd << "> Disconnected" << std::endl;
+            shutdown(cfd, SHUT_RDWR); // aviso y cierre de socket, forma mas limpia
+            close(cfd); //libera el fd
+        }
     }
-    if (_serverFd != -1)
-    {
-        std::cout << RED << "Server <" << _serverFd << "> Disconnected" << WHI << std::endl;
+
+    // Cierra el socket del servidor
+    if (_serverFd != -1) {
+        std::cout << "Server <" << _serverFd << "> Disconnected" << std::endl;
+        shutdown(_serverFd, SHUT_RDWR);
         close(_serverFd);
+        _serverFd = -1;
     }
+
+    // Limpia estructuras (C++98 trick para liberar capacidad)
+    std::vector<Client>().swap(_clients);
+    std::vector<struct pollfd>().swap(_fds);
+
+    std::cout << "** IRC Server shutdown gracefully **" << std::endl;
 }
 
-/*void Server::receiveNewData(int fd)
-{
-    char buff[1024];
-    memset(buff, 0, sizeof(buff));
 
-    ssize_t bytes = recv(fd, buff, sizeof(buff) - 1, 0);
 
-    if (bytes <= 0)
-    {
-        std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
-        clearClient(fd);
-        close(fd);
-    } else
-    {
-        buff[bytes] = '\0';
-        std::cout << YEL << "Client <" << fd << "> Data: " << WHI << buff;
-        // Aquí luego usaremos el buffer de Client para parsear comandos
-    }
-}*/
+// void Server::acceptNewClient()
+// {
+//     Client cli;
+//     struct sockaddr_in cliAdd;
+//     struct pollfd newPoll;
+//     socklen_t len = sizeof(cliAdd);
+
+//     int newFd = accept(_serverFd, (sockaddr *)&cliAdd, &len);
+//     if (newFd == -1)
+//         std::cout << "accept() failed" << std::endl;
+
+//     if (fcntl(newFd, F_SETFL, O_NONBLOCK) == -1)
+//         std::cout << "fcntl() failed" << std::endl;
+
+
+// 	//Seteamos struct pollfd y la anyadimos a vector _fds
+//     newPoll.fd = newFd;
+//     newPoll.events = POLLIN;
+//     newPoll.revents = 0;
+
+// 	//Seteamos atributos del obj cli y anyadimos al vector _clients
+//     cli.setFd(newFd);
+//     cli.setIp(inet_ntoa(cliAdd.sin_addr));
+//     _clients.push_back(cli);
+//     _fds.push_back(newPoll); // subir arriba
+
+// //    std::cout << GRE << "Client <" << newFd << "> Connected" << WHI << std::endl;
+// 	std::cout << "<" << newFd << "> Connected" << std::endl;
+// }
 
 void Server::acceptNewClient()
 {
-    Client cli;
     struct sockaddr_in cliAdd;
-    struct pollfd newPoll;
     socklen_t len = sizeof(cliAdd);
-
     int newFd = accept(_serverFd, (sockaddr *)&cliAdd, &len);
-    if (newFd == -1)
-    {
-        std::cout << "accept() failed" << std::endl;
-        return ;
+    if (newFd == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return; // nada que aceptar
+		std::perror("(!) ERROR:  accept()");
+        return; // no continúes con fd inválido
+//		throw std::runtime_error("(!) ERROR:  accept()"); ??? NO SE SI LANZAR EL PERROR O LA EXCEPTION
     }
 
-    if (fcntl(newFd, F_SETFL, O_NONBLOCK) == -1)
-    {
-        std::cout << "fcntl() failed" << std::endl;
-        return ;
+    if (fcntl(newFd, F_SETFL, O_NONBLOCK) == -1) {
+        ::close(newFd);
+		throw std::runtime_error("(!) ERROR: fcntl(O_NONBLOCK)");
     }
 
+    struct pollfd newPoll;
     newPoll.fd = newFd;
     newPoll.events = POLLIN;
     newPoll.revents = 0;
 
+    Client cli;
     cli.setFd(newFd);
     cli.setIp(inet_ntoa(cliAdd.sin_addr));
+
     _clients.push_back(cli);
     _fds.push_back(newPoll);
 
-    std::cout << GRE << "Client <" << newFd << "> Connected" << WHI << std::endl;
+//    std::cout << "Client <" << newFd << "> Connected" << std::endl;
+	std::cout << "<" << newFd << "> Connected" << std::endl;
 }
 
+
+//CREACION SOCKET DEL SERVER
 void Server::createSocket()
 {
     int en = 1;
@@ -123,7 +165,7 @@ void Server::createSocket()
     if (_serverFd == -1)
         throw(std::runtime_error("faild to create socket"));
 
-		// CONF LIBERACION RAPIDA DEL PUERTO
+	// CONF LIBERACION RAPIDA DEL PUERTO
     if (setsockopt(_serverFd, SOL_SOCKET, SO_REUSEADDR, &en, sizeof(en)) == -1)
         throw(std::runtime_error("faild to set option (SO_REUSEADDR) on socket"));
 
@@ -151,30 +193,41 @@ void Server::serverInit(int port, std::string& pwd)
 {
 	this->_port = port;
     this->_password = pwd;
-	//VALIDAR INPUTS
     createSocket();
 	
 	std::cout << "** Server IRC created **" << std::endl;
-	std::cout << "** Listening on port <" << this->_port << "> **" << std::endl;
+	std::cout << "Listening on port <" << this->_port << ">" << std::endl;
 
 	while (Server::_signalFlag == false)
     {
         if ((poll(&_fds[0], _fds.size(), -1) == -1) && Server::_signalFlag == false)
             throw(std::runtime_error("poll() failed"));
 
-        for (size_t i = 0; i < _fds.size(); i++)
-        {
-            if (_fds[i].revents & POLLIN)
-            {
-                if (_fds[i].fd == _serverFd)
-                    acceptNewClient();
-                else
-                    receiveNewData(_fds[i].fd);
-            }
-        }
-    }
-    closeFds();
+			// for (size_t i = 0; i < _fds.size(); i++)
+			// {
+			// 	if (_fds[i].revents & POLLIN)
+			// 	{
+			// 		if (_fds[i].fd == _serverFd)
+            //         acceptNewClient();
+			// 		else
+            //         receiveNewData(_fds[i].fd);
+			// 	}
+
+		// Recorre hacia atrás para poder borrar sin saltarte elementos
+		for (int i = static_cast<int>(_fds.size()) - 1; i >= 0; --i)
+		{
+			if (!(_fds[i].revents & POLLIN))
+				continue;
+			
+			if (_fds[i].fd == _serverFd)
+				acceptNewClient();
+			else
+				receiveNewData(_fds[i].fd); // si borra, no pasa nada: ya hemos pasado ese índice
+		}
+	}
+	closeFds(); 
 }
+
 
 
 Client *Server::getClient(int fd)
@@ -187,7 +240,7 @@ Client *Server::getClient(int fd)
 	return NULL;
 }
 
-/*
+
 void Server::receiveNewData(int fd)
 {
     char buff[1024];
@@ -197,61 +250,20 @@ void Server::receiveNewData(int fd)
 
     if (bytes <= 0)
     {
-        std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
+//        std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
+		std::cout << "<" << fd << "> Disconnected" << std::endl;
         clearClient(fd);
-        close(fd);
-        return ;
-    }
-
-    // Guardamos los nuevos datos en el buffer del cliente
-    Client* cli = getClient(fd);
-    if (!cli)
-        return ;
-
-    cli->appendToBuffer(std::string(buff, bytes));
-
-    // Procesar comandos completos (separados por \r\n)
-    std::string& buffer = cli->getBuffer();
-    size_t pos;
-
-    // Procesar solo cuando haya una línea completa
-    while ((pos = buffer.find("\r\n")) != std::string::npos)
-    {
-        std::string command = buffer.substr(0, pos);
-        buffer.erase(0, pos + 2); // eliminar hasta \r\n
-
-        if (!command.empty())
-        {
-            std::cout << YEL << "Client <" << fd << "> Command: " << WHI << command << std::endl;
-
-            // Aquí más adelante llamaremos a un parser de comandos
-            // parseCommand(cli, command);
-            parseCommand(cli, command);
-        }
-    }
-}
-*/
-void Server::receiveNewData(int fd)
-{
-    char buff[1024];
-    memset(buff, 0, sizeof(buff));
-
-    ssize_t bytes = recv(fd, buff, sizeof(buff) - 1, 0);
-
-    if (bytes <= 0)
-    {
-        std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
-        clearClient(fd);
-        close(fd);
+//        close(fd); PUESTO DENTRO DE clearClient()
         return;
     }
 
-    // Guardamos los nuevos datos en el buffer del cliente
+    // Creamos puntero al obj cliente y guardamos los datos en su buffer
     Client* cli = getClient(fd);
     if (!cli)
         return;
-
     cli->appendToBuffer(std::string(buff, bytes));
+
+	// Obtiene todo lo que hay en buffer del cliente
     std::string& buffer = cli->getBuffer();
     size_t pos;
 
@@ -259,26 +271,27 @@ void Server::receiveNewData(int fd)
     while ((pos = buffer.find("\r\n")) != std::string::npos)
     {
         std::string command = buffer.substr(0, pos);  // comando completo
-        buffer.erase(0, pos + 2);                     // quitamos del buffer
+        buffer.erase(0, pos + 2);                     // elimina del buffer lo extraido
 
         if (!command.empty())
         {
-            std::cout << YEL << "Client <" << fd << "> Command: " << WHI << command << std::endl;
+//            std::cout << YEL << "Client <" << fd << "> Command: " << WHI << command << std::endl;
+			std::cout << "<" << fd << "> " << RED << "<< " << RESET << command << std::endl;
             parseCommand(cli, command); // <-- ahora siempre es una línea completa
         }
     }
 }
-
-// Helper para dividir un string en tokens
-std::vector<std::string> split(const std::string& str, char delim)
-{
-    std::vector<std::string> tokens;
-    std::stringstream ss(str);
-    std::string token;
-    while (std::getline(ss, token, delim))
-        tokens.push_back(token);
-    return tokens;
-}
+// MOVIDO A UTILS
+// // Helper para dividir un string en tokens
+// std::vector<std::string> split(const std::string& str, char delim)
+// {
+//     std::vector<std::string> tokens;
+//     std::stringstream ss(str);
+//     std::string token;
+//     while (std::getline(ss, token, delim))
+//         tokens.push_back(token);
+//     return tokens;
+// }
 
 static std::string joinFrom(const std::vector<std::string>& v, size_t start, const std::string& sep = " ")
 {
@@ -298,8 +311,8 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
     if (cmd.empty())
         return ;
 
-    // 1. Separar en tokens por espacio
-    std::vector<std::string> tokens = split(cmd, ' ');
+    // Separar en tokens por espacio
+    std::vector<std::string> tokens = Utils::split(cmd, ' ');
     if (tokens.empty())
         return ;
 
@@ -333,39 +346,24 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
     //     handlePrivmsg(cli, tokens);
     // }
     else {
-        std::cout << RED << "Unknown command: " << cmd << WHI << std::endl;
+        std::cout << "Unknown command: " << cmd << std::endl;
         // Aquí luego podemos enviar un error al cliente
         //return ;
     }
 }
 
 
-/*void Server::handlePass(Client *cli, const std::vector<std::string>& tokens)
-{
-    (void)cli;
-    std::cout << tokens[0] << " command received" << std::endl;
-}*/
-
-/*void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
-{
-    (void)cli;
-    std::cout << tokens[0] << " command received" << std::endl;
-}*/
-
-/*void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
-{
-    (void)cli;
-    std::cout << tokens[0] << " command received" << std::endl;
-}*/
 
 void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
 {
-    if (!cli)
-        return ;
+    if (!cli) {
+		return;
+	 }
 
-    if (tokens.size() < 2)
+	//if (tokens.size() < 2)
+	if (tokens.size() != 2)
     {
-        sendToClient(*cli, "461 PASS :Not enough parameters\r\n");
+        sendToClient(*cli, "461 PASS :Not valid number of parameters\r\n");
         return ;
     }
     if (cli->isAuthenticated())
@@ -376,6 +374,7 @@ void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
 
     const std::string& passArg = tokens[1]; // puede venir con ':' delante en algunos clientes
     std::string pwd = passArg;
+
     if (!pwd.empty() && pwd[0] == ':')
         pwd.erase(0, 1);
 
@@ -485,7 +484,7 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
     Channel& chan = getOrCreateChannel(channelName);
 
     // Primer usuario → operador
-    bool isFirst = chan.getClients().empty();
+    bool isFirst = chan.getClients().empty(); 
     chan.addClient(cli->getFd(), isFirst);
 
     // Aviso al propio cliente
@@ -626,8 +625,8 @@ void Server::tryRegister(Client& client)
         sendToClient(client, ":ircserv 001 " + client.getNickname() + " :Welcome to the IRC server, " 
                     + client.getNickname() + "!" + client.getUsername() + "@localhost\r\n");
 
-        std::cout << GRE << "Client <" << client.getFd() << "> authenticated as " 
-                  << client.getNickname() << WHI << std::endl;
+//        std::cout << "<" << client.getFd() << "> authenticated as "
+//                 << client.getNickname() << std::endl; // DEBUG
     }
 }
 
@@ -641,23 +640,20 @@ void Server::sendToClient(Client& client, const std::string& message)
     while (totalSent < length)
     {
         ssize_t sent = send(fd, buffer + totalSent, length - totalSent, 0);
-        if (sent <= 0)
-        {
-            if (errno == EWOULDBLOCK || errno == EAGAIN)
-            {
-                // El socket no está listo → esperar y reintentar
-                break ;
-            }
+		if (sent <= 0)
+		{
+			if (errno == EWOULDBLOCK || errno == EAGAIN) // El socket no está listo → esperar y reintentar
+			break ;
             else
             {
-                std::cerr << RED << "Error sending to client <" << fd << ">" << WHI << std::endl;
-                //removeClient(fd); // cerrar la conexión
-                clearClient(fd);
-                close(fd);
+				std::cerr << "Error sending to client <" << fd << ">" << std::endl;
+                clearClient(fd); // ya tiene un close()
+				// close(fd); no va porque es un doble close()
                 return ;
             }
         }
         totalSent += sent;
+		std::cout << "<" << fd << "> " << GREEN << ">> " << RESET << message << std::endl;
     }
 }
 
