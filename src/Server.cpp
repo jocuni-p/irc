@@ -14,7 +14,77 @@ void Server::signalHandler(int signum)
 Server::Server() : _port(0), _serverFd(-1) {}
 
 
-// Elimina un cliente de vector _fds y de _clients
+//CREACION SOCKET DEL SERVER
+void Server::createSocket()
+{
+	int en = 1;
+	struct sockaddr_in add;
+	struct pollfd newPoll;
+
+	// INICIALIZA STRUCT DEL SOCKET (asigna IP, PORT y escucha a cualquier ip))
+	add.sin_family = AF_INET;
+	add.sin_addr.s_addr = INADDR_ANY;
+	add.sin_port = htons(this->_port);
+
+	// CREA EL SOCKET
+	_serverFd = socket(AF_INET, SOCK_STREAM, 0);
+	if (_serverFd == -1)
+		throw(std::runtime_error("faild to create socket"));
+
+	// CONF LIBERACION RAPIDA DEL PUERTO
+	if (setsockopt(_serverFd, SOL_SOCKET, SO_REUSEADDR, &en, sizeof(en)) == -1)
+		throw(std::runtime_error("faild to set option (SO_REUSEADDR) on socket"));
+
+	// HACE NO BLOQUEANTE AL SOCKET
+	if (fcntl(_serverFd, F_SETFL, O_NONBLOCK) == -1)
+		throw(std::runtime_error("faild to set option (O_NONBLOCK) on socket"));
+
+	// ENLAZA el socket a su struct de datos(socket <-> IP + PORT)
+	if (bind(_serverFd, (struct sockaddr *)&add, sizeof(add)) == -1)
+		throw(std::runtime_error("faild to bind socket"));
+
+	// PONE EN ESCUCHA EL PUERTO del socket (fd, num conexiones max admitidas en SO)
+	if (listen(_serverFd, SOMAXCONN) == -1)
+		throw(std::runtime_error("listen() on server failed"));
+
+	// CONFIG y AÑADE struct pollfd DEL SERVER al vector<> _fds
+	newPoll.fd = _serverFd;
+	newPoll.events = POLLIN;
+	newPoll.revents = 0;
+	_fds.push_back(newPoll);
+
+}
+// CREA Y PONE SERVER EN ESCUCHA
+void Server::serverInit(int port, std::string& pwd)
+{
+	this->_port = port;
+	this->_password = pwd;
+	createSocket();
+	
+	std::cout << "** Server IRC created **" << std::endl;
+	std::cout << "Listening on port <" << this->_port << ">" << std::endl;
+
+	while (Server::_signalFlag == false)
+	{
+		if ((poll(&_fds[0], _fds.size(), -1) == -1) && Server::_signalFlag == false)
+			throw(std::runtime_error("poll() failed"));
+
+		// Recorre hacia atrás para poder borrar sin saltarte elementos
+		for (int i = static_cast<int>(_fds.size()) - 1; i >= 0; --i)
+		{
+			if (!(_fds[i].revents & POLLIN))
+				continue;
+			
+			if (_fds[i].fd == _serverFd)
+				acceptNewClient();
+			else
+				receiveNewData(_fds[i].fd);
+		}
+	}
+	closeFds(); 
+}
+
+// Elimina un cliente de _fds y de _clients
 void Server::clearClient(int fd)
 {
     // Cierra primero, ignora errores
@@ -23,38 +93,25 @@ void Server::clearClient(int fd)
         close(fd);
     }
 
-    // Borra de _fds
+    // Lo elimina de _fds
     for (size_t i = 0; i < _fds.size(); ++i) {
         if (_fds[i].fd == fd) {
             _fds.erase(_fds.begin() + i);
             break;
         }
     }
-    // Borra de _clients
+    // Lo elimina de _clients
     for (size_t i = 0; i < _clients.size(); ++i) {
         if (_clients[i].getFd() == fd) {
             _clients.erase(_clients.begin() + i);
             break;
         }
     }
+	std::cout << "<" << fd << "> Disconnected" << std::endl;
 }
 
 
-// void Server::closeFds()
-// {
-//     for (size_t i = 0; i < _clients.size(); i++)
-//     {
-//         std::cout << "<" << _clients[i].getFd() << "> Disconnected" << std::endl;// DEBUG
-//         close(_clients[i].getFd());
-//     }
-//     if (_serverFd != -1)
-//     {
-//         std::cout << "Server <" << _serverFd << "> Disconnected" << std::endl; // DEBUG
-//         close(_serverFd);
-//     }
-// 	std::cout << "** IRC Server shutdown gracefully **" << std::endl;
-// }
-
+//Cierre total de estructuras y sockets limpiamente
 void Server::closeFds()
 {
     // Cierra clientes (forma limpia)
@@ -83,36 +140,6 @@ void Server::closeFds()
 }
 
 
-
-// void Server::acceptNewClient()
-// {
-//     Client cli;
-//     struct sockaddr_in cliAdd;
-//     struct pollfd newPoll;
-//     socklen_t len = sizeof(cliAdd);
-
-//     int newFd = accept(_serverFd, (sockaddr *)&cliAdd, &len);
-//     if (newFd == -1)
-//         std::cout << "accept() failed" << std::endl;
-
-//     if (fcntl(newFd, F_SETFL, O_NONBLOCK) == -1)
-//         std::cout << "fcntl() failed" << std::endl;
-
-
-// 	//Seteamos struct pollfd y la anyadimos a vector _fds
-//     newPoll.fd = newFd;
-//     newPoll.events = POLLIN;
-//     newPoll.revents = 0;
-
-// 	//Seteamos atributos del obj cli y anyadimos al vector _clients
-//     cli.setFd(newFd);
-//     cli.setIp(inet_ntoa(cliAdd.sin_addr));
-//     _clients.push_back(cli);
-//     _fds.push_back(newPoll); // subir arriba
-
-// //    std::cout << GRE << "Client <" << newFd << "> Connected" << WHI << std::endl;
-// 	std::cout << "<" << newFd << "> Connected" << std::endl;
-// }
 
 void Server::acceptNewClient()
 {
@@ -143,90 +170,10 @@ void Server::acceptNewClient()
     _clients.push_back(cli);
     _fds.push_back(newPoll);
 
-//    std::cout << "Client <" << newFd << "> Connected" << std::endl;
 	std::cout << "<" << newFd << "> Connected" << std::endl;
 }
 
 
-//CREACION SOCKET DEL SERVER
-void Server::createSocket()
-{
-    int en = 1;
-    struct sockaddr_in add;
-    struct pollfd newPoll;
-
-	// INICIALIZA STRUCT DEL SOCKET (asigna IP, PORT y escucha a cualquier ip))
-    add.sin_family = AF_INET;
-    add.sin_addr.s_addr = INADDR_ANY;
-    add.sin_port = htons(this->_port);
-
-	// CREA EL SOCKET
-    _serverFd = socket(AF_INET, SOCK_STREAM, 0);
-    if (_serverFd == -1)
-        throw(std::runtime_error("faild to create socket"));
-
-	// CONF LIBERACION RAPIDA DEL PUERTO
-    if (setsockopt(_serverFd, SOL_SOCKET, SO_REUSEADDR, &en, sizeof(en)) == -1)
-        throw(std::runtime_error("faild to set option (SO_REUSEADDR) on socket"));
-
-	// HACE NO BLOQUEANTE AL SOCKET
-    if (fcntl(_serverFd, F_SETFL, O_NONBLOCK) == -1)
-        throw(std::runtime_error("faild to set option (O_NONBLOCK) on socket"));
-
-	// ENLAZA el socket a su struct de datos(socket <-> IP + PORT)
-    if (bind(_serverFd, (struct sockaddr *)&add, sizeof(add)) == -1)
-        throw(std::runtime_error("faild to bind socket"));
-
-	// PONE EN ESCUCHA EL PUERTO del socket (fd, num conexiones max admitidas en SO)
-    if (listen(_serverFd, SOMAXCONN) == -1)
-        throw(std::runtime_error("listen() on server failed"));
-
-	// CONFIG y AÑADE struct pollfd DEL SERVER al vector<> _fds
-    newPoll.fd = _serverFd;
-    newPoll.events = POLLIN;
-    newPoll.revents = 0;
-    _fds.push_back(newPoll);
-
-}
-
-void Server::serverInit(int port, std::string& pwd)
-{
-	this->_port = port;
-    this->_password = pwd;
-    createSocket();
-	
-	std::cout << "** Server IRC created **" << std::endl;
-	std::cout << "Listening on port <" << this->_port << ">" << std::endl;
-
-	while (Server::_signalFlag == false)
-    {
-        if ((poll(&_fds[0], _fds.size(), -1) == -1) && Server::_signalFlag == false)
-            throw(std::runtime_error("poll() failed"));
-
-			// for (size_t i = 0; i < _fds.size(); i++)
-			// {
-			// 	if (_fds[i].revents & POLLIN)
-			// 	{
-			// 		if (_fds[i].fd == _serverFd)
-            //         acceptNewClient();
-			// 		else
-            //         receiveNewData(_fds[i].fd);
-			// 	}
-
-		// Recorre hacia atrás para poder borrar sin saltarte elementos
-		for (int i = static_cast<int>(_fds.size()) - 1; i >= 0; --i)
-		{
-			if (!(_fds[i].revents & POLLIN))
-				continue;
-			
-			if (_fds[i].fd == _serverFd)
-				acceptNewClient();
-			else
-				receiveNewData(_fds[i].fd); // si borra, no pasa nada: ya hemos pasado ese índice
-		}
-	}
-	closeFds(); 
-}
 
 
 
@@ -250,7 +197,6 @@ void Server::receiveNewData(int fd)
 
     if (bytes <= 0)
     {
-//        std::cout << RED << "Client <" << fd << "> Disconnected" << WHI << std::endl;
 		std::cout << "<" << fd << "> Disconnected" << std::endl;
         clearClient(fd);
 //        close(fd); PUESTO DENTRO DE clearClient()
@@ -275,7 +221,6 @@ void Server::receiveNewData(int fd)
 
         if (!command.empty())
         {
-//            std::cout << YEL << "Client <" << fd << "> Command: " << WHI << command << std::endl;
 			std::cout << "<" << fd << "> " << RED << "<< " << RESET << command << std::endl;
             parseCommand(cli, command); // <-- ahora siempre es una línea completa
         }
@@ -326,9 +271,9 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 
     }
 
-    // 2. Enrutamos según comando
+    // Enrutamos según comando
     if (command == "CAP" || command == "QUIT") {
-        return ;
+        return ; //ignora estos comandos
     }
     if (command == "PASS") {
         handlePass(cli, tokens);
@@ -353,11 +298,10 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
     }
     else {
         std::cout << "Unknown command: " << cmd << std::endl;
-        // Aquí luego podemos enviar un error al cliente
-        //return ;
+		//Aqui llegaran los comandos que maneja HexChat y nosotros no hemos contemplado por que subject no lo requiere
+        // quiza lo mejor sea no hacer nada mas aqui
     }
 }
-
 
 
 void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
@@ -370,6 +314,7 @@ void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
 	if (tokens.size() != 2)
     {
         sendToClient(*cli, "461 PASS :Not valid number of parameters\r\n");
+		//El server debe cerrar la conexion con el client aqui
         return ;
     }
     if (cli->isAuthenticated())
@@ -378,7 +323,7 @@ void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
         return ;
     }
 
-    const std::string& passArg = tokens[1]; // puede venir con ':' delante en algunos clientes
+    const std::string& passArg = tokens[1]; // puede venir con ':' delante en algunos clientes OJO: DEBATIR con Sergio
     std::string pwd = passArg;
 
     if (!pwd.empty() && pwd[0] == ':')
@@ -386,8 +331,9 @@ void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
 
     if (_password != pwd) {
         sendToClient(*cli, "464 :Password incorrect\r\n");
-        return ;
-    }
+		clearClient(cli->getFd());
+		return;
+	}
 
     cli->setPassAccepted(true);
     sendToClient(*cli, "NOTICE AUTH :Password accepted\r\n");
