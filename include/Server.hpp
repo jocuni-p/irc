@@ -47,9 +47,10 @@ private:
     static bool                     _signalFlag;
     std::vector<Client>             _clients;
     std::vector<struct pollfd>      _fds;
-	//    std::map<std::string, Channel> 	_channels; // nombre -> Channel
+    //std::map<std::string, Channel>  _channels;
+    std::vector<Channel>            _channels;
 
-//    Channel& getOrCreateChannel(const std::string& name);
+    Channel* getOrCreateChannel(const std::string& name);
 
     // Helpers / parser
     Client* getClient(int fd);
@@ -63,6 +64,8 @@ private:
     void handleUser(Client* cli, const std::vector<std::string>& tokens);
     void handleJoin(Client* cli, const std::vector<std::string>& tokens);
     void handlePrivmsg(Client* cli, const std::vector<std::string>& tokens);
+    void handleTopic(Client* cli, const std::vector<std::string>& tokens);
+    void handleMode(Client* cli, const std::vector<std::string>& tokens);
 
     void sendToClient(Client& client, const std::string& message);
 

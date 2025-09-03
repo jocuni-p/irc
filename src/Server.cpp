@@ -342,9 +342,15 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
     else if (command == "JOIN") {
         handleJoin(cli, tokens);
     }
-    // else if (command == "PRIVMSG") {
-    //     handlePrivmsg(cli, tokens);
-    // }
+    else if (command == "PRIVMSG") {
+        handlePrivmsg(cli, tokens);
+    }
+    else if (command == "TOPIC") {
+        handleTopic(cli, tokens);
+    }
+    else if (command == "MODE") {
+        handleMode(cli, tokens);
+    }
     else {
         std::cout << "Unknown command: " << cmd << std::endl;
         // Aquí luego podemos enviar un error al cliente
@@ -468,7 +474,7 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
 /*
 void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
 {
-    if (tokens.empty())
+    if (tokens.size() < 2)//if (tokens.empty())
     {
         sendToClient(*cli, "461 JOIN :Not enough parameters\r\n");
         return ;
@@ -481,25 +487,24 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
         return ;
     }
 
-    Channel& chan = getOrCreateChannel(channelName);
+    Channel *chan = getOrCreateChannel(channelName);
 
     // Primer usuario → operador
-    bool isFirst = chan.getClients().empty(); 
-    chan.addClient(cli->getFd(), isFirst);
+    bool isFirst = chan->getClients().empty();
+    chan->addClient(cli->getFd(), isFirst);
 
     // Aviso al propio cliente
     sendToClient(*cli, ":" + cli->getNickname() + " JOIN " + channelName + "\r\n");
 
     // Aviso a los demás en el canal
-    const std::set<int>& members = chan.getClients();
+    const std::set<int>& members = chan->getClients();
     for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
     {
-        if (*it != cli->getFd()) {
+        if (*it != cli->getFd())
+        {
             Client* other = getClient(*it);
             if (other)
-            {
                 sendToClient(*other, ":" + cli->getNickname() + " JOIN " + channelName + "\r\n");
-            }
         }
     }
 }*/
@@ -521,60 +526,42 @@ void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
     }
 
     std::string target = tokens[1];//tokens[0];  // puede ser nick o canal
-    std::string message;
+    std::string message = tokens[2];
 
     // El mensaje puede empezar con ':' y tener espacios
     if (tokens[2][0] == ':')
+        message = tokens[2].substr(1);              // quitar el ':'
+    for (size_t i = 3; i < tokens.size(); ++i)      // Si luego de message hay más tokens -> unificarlos en un message
+        message += " " + tokens[i];
+        
+    // 2. Decidir si es un channel o un client
+    if (target[0] == '#') // => es un channel
     {
-        message = tokens[2].substr(1); // quitar el ':'
-        for (size_t i = 3; i < tokens.size(); ++i)
+        //target = tokens[1].substr(1);              // quitar el '#' NO HACE FALTA PORQUE EL NOMBRE SE GUARDA CON #
+        Channel *chan = 0;//nullptr;
+        for (size_t i = 0; i < _channels.size(); i++)
         {
-            message += " " + tokens[i];
+            if (_channels[i].getName() == target)
+            {
+                chan = &_channels[i];
+                break ;
+            }
         }
-    }
-    else
-    {
-        // Mensaje sin ':' → unir igualmente
-        message = tokens[2];
-        for (size_t i = 3; i < tokens.size(); ++i)
-        {
-            message += " " + tokens[i];
-        }
-    }
 
-    // 2. Decidir si es un canal o un cliente
-    if (target[0] == '#') // --- PRIVMSG a canal ---
-    {
-        std::map<std::string, Channel>::iterator it = _channels.find(target);
-        if (it == _channels.end())
+        if (!chan)
         {
             sendToClient(*cli, ":localhost 403 " + cli->getNickname() + " " + target + " :No such channel\r\n");
             return ;
         }
 
-        Channel& chan = it->second;
-
-        if (!chan.isMember(cli->getFd()))//if (!chan.hasClient(cli->getFd()))
+        if (!chan->isMember(cli->getFd()))//if (!chan.hasClient(cli->getFd()))
         {
             sendToClient(*cli, ":localhost 442 " + cli->getNickname() + " " + target + " :You're not on that channel\r\n");
             return ;
         }
-
+       
         // reenviar a todos los clientes del canal excepto el emisor
-		const std::set<int>& members = chan.getClients();
-
-        for (std::set<int>::iterator mit = members.begin(); mit != members.end(); ++mit)
-        {
-            int memberFd = *mit;
-            if (memberFd != cli->getFd())
-            {
-                sendToClient(memberFd, ":" + sender->getNick() + " PRIVMSG " + target + " :" + message + "\r\n");
-            }
-        }
-
-        
-        // reenviar a todos los clientes del canal excepto el emisor
-        const std::set<int>& members = chan.getClients();
+        const std::set<int>& members = chan->getClients();
         for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
         {
             if (*it != cli->getFd())
@@ -657,16 +644,256 @@ void Server::sendToClient(Client& client, const std::string& message)
     }
 }
 
-/*
-Channel& Server::getOrCreateChannel(const std::string& name)
+
+Channel* Server::getOrCreateChannel(const std::string& name)
 {
-    std::map<std::string, Channel>::iterator it = _channels.find(name);
-    if (it == _channels.end())
+    for (size_t i = 0; i < _channels.size(); i++)
     {
-        // se crea nuevo canal
-        _channels.insert(std::make_pair(name, Channel(name)));
-        it = _channels.find(name);
+        if (_channels[i].getName() == name)
+            return &_channels[i];
     }
-    return it->second;
+    _channels.push_back(Channel(name));
+    return &_channels.back();
 }
-	*/
+
+void Server::handleTopic(Client* cli, const std::vector<std::string>& tokens)
+{
+    if (tokens.size() < 2)
+    {
+        sendToClient(*cli, ":localhost 461 " + cli->getNickname() + " TOPIC :Not enough parameters\r\n");
+        return ;
+    }
+
+    std::string channelName = tokens[1];
+
+    // Buscar canal en vector
+    Channel* chan = 0;//NULL;
+    for (size_t i = 0; i < _channels.size(); ++i)
+    {
+        if (_channels[i].getName() == channelName)
+        {
+            chan = &_channels[i];
+            break ;
+        }
+    }
+
+    if (!chan)
+    {
+        sendToClient(*cli, ":localhost 403 " + cli->getNickname() + " " + channelName + " :No such channel\r\n");
+        return ;
+    }
+
+    if (!chan->isMember(cli->getFd()))
+    {
+        sendToClient(*cli, ":localhost 442 " + cli->getNickname() + " " + channelName + " :You're not on that channel\r\n");
+        return ;
+    }
+
+    // Solo consultar topic
+    if (tokens.size() == 2)
+    {
+        if (chan->hasTopic())
+        {
+            sendToClient(*cli, ":localhost 332 " + cli->getNickname() + " " + channelName + " :" + chan->getTopic() + "\r\n");
+        }
+        else
+        {
+            sendToClient(*cli, ":localhost 331 " + cli->getNickname() + " " + channelName + " :No topic is set\r\n");
+        }
+        return ;
+    }
+
+    // Cambiar topic
+    // Si modo +t está activo, solo operadores pueden
+    if (chan->isModeT() && !chan->isOperator(cli->getFd()))
+    {
+        sendToClient(*cli, ":localhost 482 " + cli->getNickname() + " " + channelName + " :You're not channel operator\r\n");
+        return ;
+    }
+
+    // Reconstruir el nuevo topic
+    std::string topic;
+    if (tokens[2][0] == ':')
+        topic = tokens[2].substr(1);
+    else
+        topic = tokens[2];
+    for (size_t i = 3; i < tokens.size(); ++i)
+        topic += " " + tokens[i];
+
+    chan->setTopic(topic);
+
+    // Avisar a todos los miembros del canal
+    const std::set<int>& members = chan->getClients();
+    for (std::set<int>::const_iterator mit = members.begin(); mit != members.end(); ++mit)
+    {
+        Client* other = getClient(*mit);
+        if (other)
+        {
+            sendToClient(*other, ":" + cli->getNickname() + " TOPIC " + channelName + " :" + topic + "\r\n");
+        }
+    }
+}
+
+void Server::handleMode(Client* cli, const std::vector<std::string>& tokens)
+{
+    if (tokens.size() < 2)
+    {
+        sendToClient(*cli, "461 MODE :Not enough parameters\r\n");
+        return ;
+    }
+
+    // Comprobar que channel comienza por '#'
+    std::string target = tokens[1];
+    if (target[0] != '#')
+    {
+        sendToClient(*cli, "403 " + target + " :No such channel\r\n");
+        return ;
+    }
+
+    // Buscar canal en el vector
+    Channel* chan = 0;//NULL
+    for (size_t i = 0; i < _channels.size(); ++i)
+    {
+        if (_channels[i].getName() == target)
+        {
+            chan = &_channels[i];
+            break ;
+        }
+    }
+
+    if (!chan)
+    {
+        sendToClient(*cli, "403 " + target + " :No such channel\r\n");
+        return ;
+    }
+
+    // Si no hay flags → mostrar modos actuales
+    if (tokens.size() == 2)
+    {
+        std::string modes;
+        //if (chan->isModeT()) modes += "t";
+        if (modes.empty()) modes = "";
+        //std::string modes = "";
+        if (chan->isModeT()) modes += "t";
+        if (chan->isModeI()) modes += "i";
+        if (chan->isModeK()) modes += "k";
+        if (chan->isModeL()) modes += "l";
+
+        if (!modes.empty())
+            sendToClient(*cli, ":" + cli->getNickname() + " MODE " + target + " +" + modes + "\r\n");
+        else
+            sendToClient(*cli, ":" + cli->getNickname() + " MODE " + target + " has no modes" + modes + "\r\n");
+        return ;
+    }
+
+    // Validar que sea operador
+    if (!chan->isOperator(cli->getFd()))
+    {
+        sendToClient(*cli, "482 " + target + " :You're not channel operator\r\n");
+        return ;
+    }
+
+    // Procesar flags (+t / -t por ahora)
+/*  std::string modes = tokens[2];
+    for (size_t i = 0; i < modes.size(); ++i)
+    {
+        if (modes[i] == '+')
+            continue ;
+        if (modes[i] == '-')
+            continue ;
+        if (modes[i] == 't')
+        {
+            if (tokens[2][0] == '+')
+                chan->setModeT(true);
+            else if (tokens[2][0] == '-')
+                chan->setModeT(false);
+
+            // Avisar a todos en el canal
+            const std::set<int>& members = chan->getClients();
+            for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
+            {
+                Client* other = getClient(*it);
+                if (other)
+                {
+                    sendToClient(*other, ":" + cli->getNickname() + " MODE " + target + " " + tokens[2] + "\r\n");
+                }
+            }
+        }
+        else
+        {
+            sendToClient(*cli, "472 " + std::string(1, modes[i]) + " :is unknown mode char\r\n");
+        }
+    }*/
+
+    // Procesar flags
+    std::string modeStr = tokens[2];
+    bool add = true;
+    size_t argIndex = 3; // índice para argumentos opcionales (key o limit)
+
+    for (size_t i = 0; i < modeStr.size(); ++i)///////////FALTA CHECKEAR MODE == +-tikl
+    {
+        char m = modeStr[i];
+        if (m == '+') { add = true; continue; }
+        if (m == '-') { add = false; continue; }
+
+        if (m == 't')
+            chan->setModeT(add);
+        else if (m == 'i')
+            chan->setModeI(add);
+        else if (m == 'k')
+        {
+            if (add)
+            {
+                if (argIndex >= tokens.size())
+                {
+                    sendToClient(*cli, "461 MODE :Not enough parameters for +k\r\n");
+                    continue;
+                }
+                chan->setKey(tokens[argIndex++]);
+            }
+            else
+            {
+                chan->setModeK(false);
+                chan->setKey("");
+            }
+        }
+        else if (m == 'l')
+        {
+            if (add)
+            {
+                if (argIndex >= tokens.size())
+                {
+                    sendToClient(*cli, "461 MODE :Not enough parameters for +l\r\n");
+                    continue;
+                }
+                int limit = std::atoi(tokens[argIndex++].c_str());
+                if (limit <= 0)
+                {
+                    sendToClient(*cli, "461 MODE :Invalid user limit\r\n");
+                    continue;
+                }
+                chan->setUserLimit(limit);
+            }
+            else
+            {
+                chan->setModeL(false);
+                chan->setUserLimit(0);
+            }
+        }
+        else
+        {
+            sendToClient(*cli, "472 " + std::string(1, m) + " :is unknown mode char\r\n");
+        }
+    }
+
+    // Notificar a todos en el canal
+    const std::set<int>& members = chan->getClients();
+    for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
+    {
+        Client* other = getClient(*it);
+        if (other)
+        {
+            sendToClient(*other, ":" + cli->getNickname() + " MODE " + target + " " + modeStr + "\r\n");
+        }
+    }
+}
