@@ -450,7 +450,7 @@ void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
 }*/
 void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
 {
-    if (tokens.empty())
+    if (tokens.size() < 2)//if (tokens.empty())
     {
         sendToClient(*cli, "461 JOIN :Not enough parameters\r\n");
         return ;
@@ -463,25 +463,24 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
         return ;
     }
 
-    Channel& chan = getOrCreateChannel(channelName);
+    Channel *chan = getOrCreateChannel(channelName);
 
     // Primer usuario → operador
-    bool isFirst = chan.getClients().empty();
-    chan.addClient(cli->getFd(), isFirst);
+    bool isFirst = chan->getClients().empty();
+    chan->addClient(cli->getFd(), isFirst);
 
     // Aviso al propio cliente
     sendToClient(*cli, ":" + cli->getNickname() + " JOIN " + channelName + "\r\n");
 
     // Aviso a los demás en el canal
-    const std::set<int>& members = chan.getClients();
+    const std::set<int>& members = chan->getClients();
     for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
     {
-        if (*it != cli->getFd()) {
+        if (*it != cli->getFd())
+        {
             Client* other = getClient(*it);
             if (other)
-            {
                 sendToClient(*other, ":" + cli->getNickname() + " JOIN " + channelName + "\r\n");
-            }
         }
     }
 }
@@ -501,59 +500,42 @@ void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
     }
 
     std::string target = tokens[1];//tokens[0];  // puede ser nick o canal
-    std::string message;
+    std::string message = tokens[2];
 
     // El mensaje puede empezar con ':' y tener espacios
     if (tokens[2][0] == ':')
+        message = tokens[2].substr(1);              // quitar el ':'
+    for (size_t i = 3; i < tokens.size(); ++i)      // Si luego de message hay más tokens -> unificarlos en un message
+        message += " " + tokens[i];
+        
+    // 2. Decidir si es un channel o un client
+    if (target[0] == '#') // => es un channel
     {
-        message = tokens[2].substr(1); // quitar el ':'
-        for (size_t i = 3; i < tokens.size(); ++i)
+        //target = tokens[1].substr(1);              // quitar el '#' NO HACE FALTA PORQUE EL NOMBRE SE GUARDA CON #
+        Channel *chan = 0;//nullptr;
+        for (size_t i = 0; i < _channels.size(); i++)
         {
-            message += " " + tokens[i];
+            if (_channels[i].getName() == target)
+            {
+                chan = &_channels[i];
+                break ;
+            }
         }
-    }
-    else
-    {
-        // Mensaje sin ':' → unir igualmente
-        message = tokens[2];
-        for (size_t i = 3; i < tokens.size(); ++i)
-        {
-            message += " " + tokens[i];
-        }
-    }
 
-    // 2. Decidir si es un canal o un cliente
-    if (target[0] == '#') // --- PRIVMSG a canal ---
-    {
-        std::map<std::string, Channel>::iterator it = _channels.find(target);
-        if (it == _channels.end())
+        if (!chan)
         {
             sendToClient(*cli, ":localhost 403 " + cli->getNickname() + " " + target + " :No such channel\r\n");
             return ;
         }
 
-        Channel& chan = it->second;
-
-        if (!chan.isMember(cli->getFd()))//if (!chan.hasClient(cli->getFd()))
+        if (!chan->isMember(cli->getFd()))//if (!chan.hasClient(cli->getFd()))
         {
             sendToClient(*cli, ":localhost 442 " + cli->getNickname() + " " + target + " :You're not on that channel\r\n");
             return ;
         }
-
+       
         // reenviar a todos los clientes del canal excepto el emisor
-        /*const std::set<int>& members = chan.getClients();
-
-        for (std::set<int>::iterator mit = members.begin(); mit != members.end(); ++mit)
-        {
-            int memberFd = *mit;
-            if (memberFd != cli->getFd())
-            {
-                sendToClient(memberFd, ":" + sender->getNick() + " PRIVMSG " + target + " :" + message + "\r\n");
-            }
-        }*/
-        
-        // reenviar a todos los clientes del canal excepto el emisor
-        const std::set<int>& members = chan.getClients();
+        const std::set<int>& members = chan->getClients();
         for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
         {
             if (*it != cli->getFd())
@@ -639,14 +621,13 @@ void Server::sendToClient(Client& client, const std::string& message)
 }
 
 
-Channel& Server::getOrCreateChannel(const std::string& name)
+Channel* Server::getOrCreateChannel(const std::string& name)
 {
-    std::map<std::string, Channel>::iterator it = _channels.find(name);
-    if (it == _channels.end())
+    for (size_t i = 0; i < _channels.size(); i++)
     {
-        // se crea nuevo canal
-        _channels.insert(std::make_pair(name, Channel(name)));
-        it = _channels.find(name);
+        if (_channels[i].getName() == name)
+            return &_channels[i];
     }
-    return it->second;
+    _channels.push_back(Channel(name));
+    return &_channels.back();
 }

@@ -6,9 +6,9 @@
 
 class Channel {
 private:
-    std::string _name;
-    std::set<int> _clients;   // fds de clientes
-    std::set<int> _operators; // fds de operadores
+    std::string     _name;
+    std::set<int>   _clients;   // fds de clientes
+    std::set<int>   _operators; // fds de operadores
 
 public:
     Channel(const std::string& name);
