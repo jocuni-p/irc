@@ -3,17 +3,28 @@
 
 #include <string>
 
+enum LoginStatus {
+    NOT_AUTHENTICATED,
+	CAP_NEGOTIATED,
+    PASS_OK,
+    NICK_OK,
+    USER_OK,
+    AUTHENTICATED
+};
+
+
 class Client
 {
 private:
     int             _fd;
-    std::string     _ip;       
-    std::string     _nickname;
-    std::string     _username;
-    std::string     _realname;
+    std::string 	_ip;       
+    std::string 	_nickname;
+    std::string 	_username;
+    std::string 	_realname;
     std::string     _buffer;
-    bool            _passAccepted;
-    bool            _authenticated;
+	LoginStatus 	_status;
+//	bool 			_passAccepted;
+//	bool            _authenticated;
 
 public:
     Client();
@@ -26,7 +37,8 @@ public:
     std::string     getNickname() const;
     std::string     getUsername() const;
     std::string     getRealname() const;
-    bool            isAuthenticated() const;
+	LoginStatus 	getStatus() const;
+//    bool            isAuthenticated() const;
     std::string&    getBuffer();
 
     // --- Setters ---
@@ -35,11 +47,12 @@ public:
     void            setNickname(const std::string& nick);
     void            setUsername(const std::string& user);
     void            setRealname(const std::string& real);
-    void            setAuthenticated(bool status);
+//    void            setAuthenticated(bool status);
+	void setStatus(LoginStatus s);
 
     // PASS
-    bool            hasPassAccepted() const;
-    void            setPassAccepted(bool status);
+//    bool            hasPassAccepted() const;
+//    void            setPassAccepted(bool status);
 
     // --- Buffer handling ---
     void            appendToBuffer(const std::string& data);

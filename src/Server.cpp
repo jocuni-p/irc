@@ -199,26 +199,26 @@ void Server::receiveNewData(int fd)
     {
 		std::cout << "<" << fd << "> Disconnected" << std::endl;
         clearClient(fd);
-//        close(fd); PUESTO DENTRO DE clearClient()
+		//        close(fd); PUESTO DENTRO DE clearClient()
         return;
     }
-
+	
     // Creamos puntero al obj cliente y guardamos los datos en su buffer
     Client* cli = getClient(fd);
     if (!cli)
-        return;
+	return;
     cli->appendToBuffer(std::string(buff, bytes));
-
+	
 	// Obtiene todo lo que hay en buffer del cliente
     std::string& buffer = cli->getBuffer();
     size_t pos;
-
+	
     // Procesar solo cuando haya una línea completa
     while ((pos = buffer.find("\r\n")) != std::string::npos)
     {
-        std::string command = buffer.substr(0, pos);  // comando completo
+		std::string command = buffer.substr(0, pos);  // comando completo
         buffer.erase(0, pos + 2);                     // elimina del buffer lo extraido
-
+		
         if (!command.empty())
         {
 			std::cout << "<" << fd << "> " << RED << "<< " << RESET << command << std::endl;
@@ -226,6 +226,252 @@ void Server::receiveNewData(int fd)
         }
     }
 }
+
+void Server::parseCommand(Client* cli, const std::string& cmd)
+{
+	if (cmd.empty())
+		return ;
+
+	if (cli->getStatus() != AUTHENTICATED)
+	{
+		handshake(cli, cmd);
+		return;
+	}
+
+	// Separar en tokens por espacio
+	std::vector<std::string> tokens = Utils::split(cmd, ' ');
+	if (tokens.empty())
+		return ;
+
+	std::string command = tokens[0];
+
+	// Convertir a mayúsculas por seguridad 
+	//OJO: REVISAR CON SERGIO, creo que HexChat ya convierte a mayusculas si es comando
+	for (size_t i = 0; i < command.size(); ++i)
+	{
+		command[i] = std::toupper(command[i]);
+		//command[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(command[i])));//uppercase seguro
+	}
+
+	if (command == "CAP" || command == "QUIT") { // ignora estos comandos, CAP puede venir mas de una vez, creo
+		return ;
+	}
+	else if (command == "JOIN") {
+		handleJoin(cli, tokens);
+	}
+	else if (command == "PRIVMSG") {
+		handlePrivmsg(cli, tokens);
+	}
+	else if (command == "TOPIC") {
+		handleTopic(cli, tokens);
+	}
+	else if (command == "MODE") {
+		handleMode(cli, tokens);
+	}
+	else {
+		std::cout << "Unknown command: " << cmd << std::endl;
+		//Aqui llegaran los comandos que maneja HexChat y nosotros no hemos contemplado por que subject no lo requiere
+		// quiza lo mejor sea no hacer nada aqui ?????
+	}
+}
+
+
+// HANDSHAKE: autentica al cliente
+void Server::handshake(Client *cli, const std::string &cmd)
+{
+	if (cmd.empty())
+		return;
+
+	std::vector<std::string> tokens = Utils::split(cmd, ' ');
+	if (tokens.empty())
+		return;
+
+	std::string command = tokens[0];
+	//REVISAR CON SERGIO, creo que HexChat ya convierte a mayusculas si es comando
+	// std::transform(command.begin(), command.end(), command.begin(), ::toupper);
+
+//==========OPCIONAL - Checkear con Sergio=========//
+	// Convertir a mayúsculas por seguridad
+	// for (size_t i = 0; i < command.size(); ++i)
+	// {
+	// 	command[i] = std::toupper(command[i]);
+	// 	//command[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(command[i])));//uppercase seguro
+
+	// }
+//======================================================
+
+
+	// Cliente ya autenticado → salimos
+	// if (cli->getStatus() == AUTHENTICATED)
+	// 	return;
+
+	// Procesamos comandos de autenticación
+	if (command == "CAP" && cli->getStatus() == NOT_AUTHENTICATED)
+	{
+		handleCap(cli); //, tokens);
+	}
+	else if (command == "PASS" && cli->getStatus() == CAP_NEGOTIATED)
+	{
+		handlePass(cli, tokens);
+	}
+	else if (command == "NICK" && cli->getStatus() == PASS_OK)
+	{
+		handleNick(cli, tokens);
+	}
+	else if (command == "USER" && cli->getStatus() == NICK_OK)
+	{
+		handleUser(cli, tokens);
+	}
+	else
+	{
+		//sendToClient(cli->getFd(), "451 :You have not registered\r\n");
+		sendToClient(*cli, "451 :You have not registered\r\n");
+	}
+
+	// Si el cliente llega a USER_OK → lo marcamos como AUTHENTICATED
+	if (cli->getStatus() == USER_OK)
+	{
+		cli->setStatus(AUTHENTICATED);
+		//sendToClient(cli->getFd()
+		sendToClient(*cli, ":server 001 " + cli->getNickname() + " :Welcome to the IRC server!\r\n");
+//		std::cout << "<" << cli->getFd() << "> " << " authenticated as" << cli->getNickname() << std::endl;
+	}
+}
+
+//RESPUESTA SOBRE LA LSITA DE CAPACIDADES QUE SOPORTA EL SERVER
+void Server::handleCap(Client *cli) //, const std::vector<std::string> &tokens)
+{
+	// RespondeMOS con lista vacía de capabilities (:)
+	std::ostringstream reply;
+	std::string nick = cli->getNickname().empty() ? "nickname" : cli->getNickname();
+	reply << ":Server CAP "
+		  << nick
+		  << " LS :\r\n";
+
+	//sendToClient(cli->getFd(), reply.str());
+	sendToClient(*cli, reply.str());
+	cli->setStatus(CAP_NEGOTIATED);
+}
+
+void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
+{
+	if (!cli) {
+		return;
+	 }
+
+	//if (tokens.size() < 2)
+	if (tokens.size() != 2)
+	{
+		sendToClient(*cli, "461 PASS :Not valid number of parameters\r\n");
+		//OJO: El server debe cerrar la conexion con el client aqui
+		return ;
+	}
+	// if (cli->isAuthenticated())
+	// {
+	// 	sendToClient(*cli, "462 :You may not reregister\r\n");
+	// 	return ;
+	// }
+
+	const std::string& passArg = tokens[1]; // puede venir con ':' delante en algunos clientes OJO: DEBATIR con Sergio
+	std::string pwd = passArg;
+	// Elimina ':' si preceden a la password
+	if (!pwd.empty() && pwd[0] == ':')
+		pwd.erase(0, 1);
+
+	if (_password != pwd) {
+		sendToClient(*cli, "464 :Password incorrect\r\n");
+		clearClient(cli->getFd());
+		return;
+	}
+
+	//cli->setPassAccepted(true);
+	cli->setStatus(PASS_OK);
+//	sendToClient(*cli, "NOTICE AUTH :Password accepted\r\n");
+	//tryRegister(*cli);
+}
+
+void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
+{
+	if (!cli)
+		return ;
+		
+	if (tokens.size() < 2) {
+		sendToClient(*cli, "431 :No nickname given\r\n");
+		return ;
+	}
+
+	if (tokens.size() != 2) {
+		sendToClient(*cli, "432 :Erroneous nickname\r\n");
+		return ;
+	}
+
+	std::string newNick = tokens[1];
+
+
+//===========CHEQUEAR CON SERGIO SI NECESARIO============
+	// Validación básica: alfanumérico (puedes ampliar a RFC si quieres)
+	for (size_t i = 0; i < newNick.size(); ++i)
+	{
+		if (!std::isalnum(static_cast<unsigned char>(newNick[i])))
+		{
+			sendToClient(*cli, "432 " + newNick + " :Erroneous nickname\r\n");
+			return ;
+		}
+	}
+//========================================================
+
+	// Valida que no este registrado previamente
+	for (size_t i = 0; i < _clients.size(); ++i)
+	{
+		if (_clients[i].getFd() != cli->getFd() && _clients[i].getNickname() == newNick)
+		{
+			sendToClient(*cli, "433 " + newNick + " :Nickname is already in use\r\n");
+			return ;
+		}
+	}
+
+	cli->setNickname(newNick);
+	sendToClient(*cli, ":* NICK " + newNick + "\r\n");
+	cli->setStatus(NICK_OK);
+//	tryRegister(*cli);
+}
+
+void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
+{
+	if (!cli)
+		return ;
+
+	// USER <username> <mode> <unused> :<realname with spaces>
+	if (tokens.size() < 4)
+	{
+		sendToClient(*cli, "461 USER :Not enough parameters\r\n");
+		return ;
+	}
+	// if (cli->isAuthenticated())
+	// {
+	// 	sendToClient(*cli, "462 :You may not reregister\r\n");
+	// 	return ;
+	// }
+
+	cli->setUsername(tokens[1]);
+	
+	// Realname puede empezar desde tokens[4] si existe, unido; si no hay, usa tokens[3]
+	std::string realname;
+	if (tokens.size() >= 5) {
+		realname = joinFrom(tokens, 4, " ");
+	} else {
+		realname = tokens[3];
+	}
+	if (!realname.empty() && realname[0] == ':')
+	realname.erase(0, 1);
+	
+	cli->setRealname(realname);
+	
+	cli->setStatus(USER_OK);
+
+//	tryRegister(*cli);
+}
+
 // MOVIDO A UTILS
 // // Helper para dividir un string en tokens
 // std::vector<std::string> split(const std::string& str, char delim)
@@ -238,7 +484,7 @@ void Server::receiveNewData(int fd)
 //     return tokens;
 // }
 
-static std::string joinFrom(const std::vector<std::string>& v, size_t start, const std::string& sep = " ")
+std::string Server::joinFrom(const std::vector<std::string>& v, size_t start, const std::string &sep)
 {
     std::string out;
     for (size_t i = start; i < v.size(); ++i)
@@ -251,165 +497,8 @@ static std::string joinFrom(const std::vector<std::string>& v, size_t start, con
 }
 
 
-void Server::parseCommand(Client* cli, const std::string& cmd)
-{
-    if (cmd.empty())
-        return ;
-
-    // Separar en tokens por espacio
-    std::vector<std::string> tokens = Utils::split(cmd, ' ');
-    if (tokens.empty())
-        return ;
-
-    std::string command = tokens[0];
-
-    // Convertir a mayúsculas por seguridad
-    for (size_t i = 0; i < command.size(); ++i)
-    {
-        command[i] = std::toupper(command[i]);
-        //command[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(command[i])));//uppercase seguro
-
-    }
-
-    // Enrutamos según comando
-    if (command == "CAP" || command == "QUIT") {
-        return ; //ignora estos comandos
-    }
-    if (command == "PASS") {
-        handlePass(cli, tokens);
-    }
-    else if (command == "NICK") {
-        handleNick(cli, tokens);
-    }
-    else if (command == "USER") {
-        handleUser(cli, tokens);
-    }
-    else if (command == "JOIN") {
-        handleJoin(cli, tokens);
-    }
-    else if (command == "PRIVMSG") {
-        handlePrivmsg(cli, tokens);
-    }
-    else if (command == "TOPIC") {
-        handleTopic(cli, tokens);
-    }
-    else if (command == "MODE") {
-        handleMode(cli, tokens);
-    }
-    else {
-        std::cout << "Unknown command: " << cmd << std::endl;
-		//Aqui llegaran los comandos que maneja HexChat y nosotros no hemos contemplado por que subject no lo requiere
-        // quiza lo mejor sea no hacer nada mas aqui
-    }
-}
 
 
-void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
-{
-    if (!cli) {
-		return;
-	 }
-
-	//if (tokens.size() < 2)
-	if (tokens.size() != 2)
-    {
-        sendToClient(*cli, "461 PASS :Not valid number of parameters\r\n");
-		//El server debe cerrar la conexion con el client aqui
-        return ;
-    }
-    if (cli->isAuthenticated())
-    {
-        sendToClient(*cli, "462 :You may not reregister\r\n");
-        return ;
-    }
-
-    const std::string& passArg = tokens[1]; // puede venir con ':' delante en algunos clientes OJO: DEBATIR con Sergio
-    std::string pwd = passArg;
-
-    if (!pwd.empty() && pwd[0] == ':')
-        pwd.erase(0, 1);
-
-    if (_password != pwd) {
-        sendToClient(*cli, "464 :Password incorrect\r\n");
-		clearClient(cli->getFd());
-		return;
-	}
-
-    cli->setPassAccepted(true);
-    sendToClient(*cli, "NOTICE AUTH :Password accepted\r\n");
-    tryRegister(*cli);
-}
-
-void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
-{
-    if (!cli)
-        return ;
-
-    if (tokens.size() < 2) {
-        sendToClient(*cli, "431 :No nickname given\r\n");
-        return ;
-    }
-
-    std::string newNick = tokens[1];
-
-////// Validación básica: alfanumérico (puedes ampliar a RFC si quieres)
-    for (size_t i = 0; i < newNick.size(); ++i)
-    {
-        if (!std::isalnum(static_cast<unsigned char>(newNick[i])))
-        {
-            sendToClient(*cli, "432 " + newNick + " :Erroneous nickname\r\n");
-            return ;
-        }
-    }
-
-    // Unicidad
-    for (size_t i = 0; i < _clients.size(); ++i)
-    {
-        if (_clients[i].getFd() != cli->getFd() && _clients[i].getNickname() == newNick)
-        {
-            sendToClient(*cli, "433 " + newNick + " :Nickname is already in use\r\n");
-            return ;
-        }
-    }
-
-    cli->setNickname(newNick);
-    sendToClient(*cli, "NICK " + newNick + "\r\n");
-    tryRegister(*cli);
-}
-
-void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
-{
-    if (!cli)
-        return ;
-
-    // USER <username> <mode> <unused> :<realname with spaces>
-    if (tokens.size() < 4)
-    {
-        sendToClient(*cli, "461 USER :Not enough parameters\r\n");
-        return ;
-    }
-    if (cli->isAuthenticated())
-    {
-        sendToClient(*cli, "462 :You may not reregister\r\n");
-        return ;
-    }
-
-    cli->setUsername(tokens[1]);
-
-    // Realname puede empezar desde tokens[4] si existe, unido; si no hay, usa tokens[3]
-    std::string realname;
-    if (tokens.size() >= 5) {
-        realname = joinFrom(tokens, 4, " ");
-    } else {
-        realname = tokens[3];
-    }
-    if (!realname.empty() && realname[0] == ':')
-        realname.erase(0, 1);
-
-    cli->setRealname(realname);
-
-    tryRegister(*cli);
-}
 
 //OJO solo para pruebas de joan
 void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
@@ -546,22 +635,22 @@ Client* Server::getClientByNick(const std::string& nick)
     return NULL; // no encontrado
 }
 
-void Server::tryRegister(Client& client)
-{
-    if (client.isAuthenticated())
-        return ;
+// void Server::tryRegister(Client& client)
+// {
+//     if (client.isAuthenticated())
+//         return ;
 
-    if (client.hasPassAccepted() && !client.getNickname().empty() && !client.getUsername().empty())
-    {
-        client.setAuthenticated(true);
+//     if (client.hasPassAccepted() && !client.getNickname().empty() && !client.getUsername().empty())
+//     {
+//         client.setAuthenticated(true);
 
-        sendToClient(client, ":ircserv 001 " + client.getNickname() + " :Welcome to the IRC server, " 
-                    + client.getNickname() + "!" + client.getUsername() + "@localhost\r\n");
+//         sendToClient(client, ":ircserv 001 " + client.getNickname() + " :Welcome to the IRC server, " 
+//                     + client.getNickname() + "!" + client.getUsername() + "@localhost\r\n");
 
-//        std::cout << "<" << client.getFd() << "> authenticated as "
-//                 << client.getNickname() << std::endl; // DEBUG
-    }
-}
+// //        std::cout << "<" << client.getFd() << "> authenticated as "
+// //                 << client.getNickname() << std::endl; // DEBUG
+//     }
+//}
 
 void Server::sendToClient(Client& client, const std::string& message)
 {

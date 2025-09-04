@@ -56,9 +56,11 @@ private:
     Client* getClient(int fd);
     Client* getClientByNick(const std::string& nick);
     void parseCommand(Client* cli, const std::string& cmd);
-    void tryRegister(Client& client);
+	void handshake(Client *cli, const std::string &cmd);
+//    void tryRegister(Client& client);
 
     // Handlers de comandos
+	void handleCap(Client *cli); //, const std::vector<std::string> &tokens);
     void handlePass(Client* cli, const std::vector<std::string>& tokens);
     void handleNick(Client* cli, const std::vector<std::string>& tokens);
     void handleUser(Client* cli, const std::vector<std::string>& tokens);
@@ -83,7 +85,9 @@ public:
     static void signalHandler(int signum);
 //	static bool isValidPasswordArg(const std::string &pass);
 //	static bool isValidPortArg(const int &port);
+	static std::string joinFrom(const std::vector<std::string> &v, size_t start, const std::string &sep = " ");
 
+	
 };
 
 #endif
