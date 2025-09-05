@@ -54,7 +54,7 @@ void Server::createSocket()
 	_fds.push_back(newPoll);
 
 }
-// CREA Y PONE SERVER EN ESCUCHA
+// CREA SERVER Y LO PONE EN BUCLE DE ESCUCHA
 void Server::serverInit(int port, std::string& pwd)
 {
 	this->_port = port;
@@ -64,12 +64,14 @@ void Server::serverInit(int port, std::string& pwd)
 	std::cout << GREEN << "\n** Server IRC created **" << RESET << std::endl;
 	std::cout << "Listening on port <" << this->_port << ">\n" << std::endl;
 
+	//NOTA: no borrar un cliente mientras tu bucle poll() todavía pueda
+	// acceder a él, sino marcarlo como pendiente de cierre y eliminarlo 
+	//de forma segura después.
 	while (Server::_signalFlag == false)
 	{
 		if ((poll(&_fds[0], _fds.size(), -1) == -1) && Server::_signalFlag == false)
 			throw(std::runtime_error("poll() failed"));
 
-		// Recorre hacia atrás para poder borrar sin saltarte elementos
 		for (int i = static_cast<int>(_fds.size()) - 1; i >= 0; --i)
 		{
 			if (!(_fds[i].revents & POLLIN))
@@ -80,11 +82,24 @@ void Server::serverInit(int port, std::string& pwd)
 			else
 				receiveNewData(_fds[i].fd);
 		}
+		// Limpia clientes marcados para borrado
+		for (int i = static_cast<int>(_clients.size()) - 1; i >= 0; --i) {
+			if (_clients[i].isMarkedForRemoval()) {
+				// Buscar y eliminar fd en _fds
+				for (size_t j = 0; j < _fds.size(); ++j) {
+					if (_fds[j].fd == _clients[i].getFd()) {
+						_fds.erase(_fds.begin() + j);
+						break;
+					}
+				}
+				_clients.erase(_clients.begin() + i);
+			}
+		}
 	}
 	closeFds(); 
 }
-
-// Elimina un cliente de _fds y de _clients
+/*
+// Elimina un cliente de _fds y de _clients y cierra su socket
 void Server::clearClient(int fd)
 {
     // Cierra primero, ignora errores
@@ -108,6 +123,18 @@ void Server::clearClient(int fd)
         }
     }
 	std::cout << YELLOW_PALE << "<" << fd << "> Disconnected" << RESET << std::endl;
+}
+*/
+void Server::clearClient(int fd)
+{
+    Client* cli = getClient(fd);
+    if (!cli) return;
+
+    cli->markForRemoval(); // marcar para borrado
+    shutdown(fd, SHUT_RDWR);
+    close(fd);
+
+    std::cout << YELLOW_PALE << "<" << fd << "> Disconnected" << RESET << std::endl;
 }
 
 
@@ -175,8 +202,6 @@ void Server::acceptNewClient()
 
 
 
-
-
 Client *Server::getClient(int fd)
 {
 	for (size_t i = 0; i < _clients.size(); i++)
@@ -197,7 +222,7 @@ void Server::receiveNewData(int fd)
 
     if (bytes <= 0)
     {
-		std::cout << YELLOW_PALE << "<" << fd << "> Disconnected" << RESET << std::endl;
+//		std::cout << YELLOW_PALE << "<" << fd << "> Disconnected" << RESET << std::endl; //Ya se hace en clearClient()
         clearClient(fd);
 		//        close(fd); PUESTO DENTRO DE clearClient()
         return;
@@ -227,6 +252,63 @@ void Server::receiveNewData(int fd)
     }
 }
 
+void Server::sendToClient(Client& client, const std::string& message)
+{
+    if (client.isMarkedForRemoval()) return; // No enviar nada
+
+    int fd = client.getFd();
+    const char* buffer = message.c_str();
+    size_t totalSent = 0;
+    size_t length = message.size();
+
+    while (totalSent < length)
+    {
+        ssize_t sent = send(fd, buffer + totalSent, length - totalSent, 0);
+        if (sent <= 0) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) break; // El socket no está listo → esperar y reintentar
+            clearClient(fd);
+            return;
+        }
+        totalSent += sent;
+    }
+	// Muestra mensaje en consola sin \r\n
+    std::cout << "<" << fd << "> " << GREEN << ">> " 
+              << RESET << Utils::stripCRLF(message) << std::endl;
+}
+/*
+void Server::sendToClient(Client& client, const std::string& message)
+{
+	int fd = client.getFd();
+	const char* buffer = message.c_str();
+	size_t totalSent = 0;
+	size_t length = message.size();
+
+	//Reintenta envio si no se envia todo
+	while (totalSent < length)
+	{
+		ssize_t sent = send(fd, buffer + totalSent, length - totalSent, 0);
+		if (sent <= 0)
+		{
+			if (errno == EWOULDBLOCK || errno == EAGAIN) // El socket no está listo → esperar y reintentar
+			break ;
+			else
+			{
+				std::cerr << "Error sending to client <" << fd << ">" << std::endl;
+				clearClient(fd); // ya tiene un close()
+				// close(fd); no va porque seria un doble close()
+				return ;
+			}
+		}
+		totalSent += sent;
+
+	// Mostrar mensaje en consola sin \r\n
+	std::cout << "<" << fd << "> " << GREEN << ">> " 
+			  << RESET << Utils::stripCRLF(message) << std::endl;
+//		std::cout << "<" << fd << "> " << GREEN << ">> " << RESET << message << std::endl;
+	}
+}
+*/
+
 void Server::parseCommand(Client* cli, const std::string& cmd)
 {
 	if (cmd.empty())
@@ -237,6 +319,23 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 		handshake(cli, cmd);
 		return;
 	}
+
+	// if (cli->getStatus() != AUTHENTICATED && cli->getStatus() != USER_OK)
+	// {
+	// 	handshake(cli, cmd);
+	// 	return;
+	// }
+		
+	// // Si el cliente llega a USER_OK → lo marcamos como AUTHENTICATED
+	// if (cli->getStatus() == USER_OK)
+	// {
+	// 	cli->setStatus(AUTHENTICATED);
+	// 	//sendToClient(cli->getFd()
+	// 	sendToClient(*cli, ":server 001 " + cli->getNickname() + " :Welcome to the IRC server!\r\n");
+	// 	std::cout << YELLOW_PALE << "<" << cli->getFd() << "> " 
+	// 	<< " Authenticated " << cli->getNickname() << RESET << std::endl;
+	// }
+
 
 	// Separar en tokens por espacio
 	std::vector<std::string> tokens = Utils::split(cmd, ' ');
@@ -252,8 +351,8 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 		command[i] = std::toupper(command[i]);
 		//command[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(command[i])));//uppercase seguro
 	}
-
-	if (command == "CAP" || command == "QUIT") { // ignora estos comandos, CAP puede venir mas de una vez, creo
+	// OJO: Los que querramos ignorar NO haria falta contemplarlos aqui
+	if (command == "CAP" || command == "QUIT" || command == "CAP END") { // ignora estos comandos, CAP puede venir mas de una vez, creo
 		return ;
 	}
 	else if (command == "JOIN") {
@@ -274,6 +373,9 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 		// quiza lo mejor sea no hacer nada aqui ?????
 	}
 }
+
+
+
 
 
 // HANDSHAKE: autentica al cliente
@@ -334,7 +436,8 @@ void Server::handshake(Client *cli, const std::string &cmd)
 		cli->setStatus(AUTHENTICATED);
 		//sendToClient(cli->getFd()
 		sendToClient(*cli, ":server 001 " + cli->getNickname() + " :Welcome to the IRC server!\r\n");
-		std::cout << YELLOW_PALE << "<" << cli->getFd() << "> " << " Authenticated" << RESET << std::endl;
+		std::cout << YELLOW_PALE << "<" << cli->getFd() << "> " 
+					<< " Authenticated " << cli->getNickname() << RESET << std::endl;
 	}
 }
 
@@ -380,7 +483,8 @@ void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
 
 	if (_password != pwd) {
 		sendToClient(*cli, "464 :Password incorrect\r\n");
-		clearClient(cli->getFd());
+//		cli->markForRemoval();
+//		clearClient(cli->getFd());
 		return;
 	}
 
@@ -622,37 +726,6 @@ Client* Server::getClientByNick(const std::string& nick)
 //     }
 //}
 
-void Server::sendToClient(Client& client, const std::string& message)
-{
-    int fd = client.getFd();
-    const char* buffer = message.c_str();
-    size_t totalSent = 0;
-    size_t length = message.size();
-
-	//Reintenta envio si no se envia todo
-    while (totalSent < length)
-    {
-        ssize_t sent = send(fd, buffer + totalSent, length - totalSent, 0);
-		if (sent <= 0)
-		{
-			if (errno == EWOULDBLOCK || errno == EAGAIN) // El socket no está listo → esperar y reintentar
-			break ;
-            else
-            {
-				std::cerr << "Error sending to client <" << fd << ">" << std::endl;
-                clearClient(fd); // ya tiene un close()
-				// close(fd); no va porque seria un doble close()
-                return ;
-            }
-        }
-        totalSent += sent;
-
-	// Mostrar mensaje en consola sin \r\n
-    std::cout << "<" << fd << "> " << GREEN << ">> " 
-              << RESET << Utils::stripCRLF(message) << std::endl;
-//		std::cout << "<" << fd << "> " << GREEN << ">> " << RESET << message << std::endl;
-    }
-}
 
 
 Channel* Server::getOrCreateChannel(const std::string& name)

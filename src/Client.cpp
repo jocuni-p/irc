@@ -1,6 +1,6 @@
 #include "../include/Client.hpp"
 
-Client::Client() : _fd(-1), _status(NOT_AUTHENTICATED) {}
+Client::Client() : _fd(-1), _status(NOT_AUTHENTICATED), _toBeRemoved(false) {} ///////////
 Client::~Client() {}
 
 // --- Getters ---
@@ -25,6 +25,10 @@ void Client::setStatus(LoginStatus s) { _status = s; }
 // PASS
 //bool Client::hasPassAccepted() const { return _passAccepted; }
 //void Client::setPassAccepted(bool status) { _passAccepted = status; }
+
+// Removed fd's handling
+void Client::markForRemoval() { _toBeRemoved = true; }
+bool Client::isMarkedForRemoval() const { return _toBeRemoved; }
 
 // --- Buffer handling ---
 void Client::appendToBuffer(const std::string& data) { _buffer += data; }
