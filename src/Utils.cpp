@@ -30,3 +30,21 @@ std::vector<std::string> Utils::split(const std::string& str, char delim)
     return tokens;
 }
 
+//Elimina '\r\n' del final de los mensajes
+std::string Utils::stripCRLF(const std::string& msg) {
+    if (msg.size() >= 2 && msg[msg.size() - 2] == '\r' && msg[msg.size() - 1] == '\n')
+        return msg.substr(0, msg.size() - 2);
+    return msg;
+}
+
+std::string Utils::joinFrom(const std::vector<std::string>& v, size_t start, const std::string &sep)
+{
+    std::string out;
+    for (size_t i = start; i < v.size(); ++i)
+    {
+        if (i > start)
+            out += sep;
+        out += v[i];
+    }
+    return out;
+}

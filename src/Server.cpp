@@ -61,8 +61,8 @@ void Server::serverInit(int port, std::string& pwd)
 	this->_password = pwd;
 	createSocket();
 	
-	std::cout << "** Server IRC created **" << std::endl;
-	std::cout << "Listening on port <" << this->_port << ">" << std::endl;
+	std::cout << GREEN << "\n** Server IRC created **" << RESET << std::endl;
+	std::cout << "Listening on port <" << this->_port << ">\n" << std::endl;
 
 	while (Server::_signalFlag == false)
 	{
@@ -107,7 +107,7 @@ void Server::clearClient(int fd)
             break;
         }
     }
-	std::cout << "<" << fd << "> Disconnected" << std::endl;
+	std::cout << YELLOW_PALE << "<" << fd << "> Disconnected" << RESET << std::endl;
 }
 
 
@@ -118,7 +118,7 @@ void Server::closeFds()
     for (size_t i = 0; i < _clients.size(); ++i) {
         int cfd = _clients[i].getFd();
         if (cfd >= 0) {
-            std::cout << "<" << cfd << "> Disconnected" << std::endl;
+            std::cout << YELLOW_PALE << "<" << cfd << "> Disconnected" << RESET << std::endl;
             shutdown(cfd, SHUT_RDWR); // aviso y cierre de socket, forma mas limpia
             close(cfd); //libera el fd
         }
@@ -126,7 +126,7 @@ void Server::closeFds()
 
     // Cierra el socket del servidor
     if (_serverFd != -1) {
-        std::cout << "Server <" << _serverFd << "> Disconnected" << std::endl;
+        std::cout << YELLOW_PALE << "Server Disconnected" << RESET << std::endl;
         shutdown(_serverFd, SHUT_RDWR);
         close(_serverFd);
         _serverFd = -1;
@@ -136,7 +136,7 @@ void Server::closeFds()
     std::vector<Client>().swap(_clients);
     std::vector<struct pollfd>().swap(_fds);
 
-    std::cout << "** IRC Server shutdown gracefully **" << std::endl;
+    std::cout << GREEN << "** IRC Server shutdown gracefully **" << RESET << std::endl;
 }
 
 
@@ -170,7 +170,7 @@ void Server::acceptNewClient()
     _clients.push_back(cli);
     _fds.push_back(newPoll);
 
-	std::cout << "<" << newFd << "> Connected" << std::endl;
+	std::cout << YELLOW_PALE << "<" << newFd << "> Connected" << RESET << std::endl;
 }
 
 
@@ -197,7 +197,7 @@ void Server::receiveNewData(int fd)
 
     if (bytes <= 0)
     {
-		std::cout << "<" << fd << "> Disconnected" << std::endl;
+		std::cout << YELLOW_PALE << "<" << fd << "> Disconnected" << RESET << std::endl;
         clearClient(fd);
 		//        close(fd); PUESTO DENTRO DE clearClient()
         return;
@@ -334,7 +334,7 @@ void Server::handshake(Client *cli, const std::string &cmd)
 		cli->setStatus(AUTHENTICATED);
 		//sendToClient(cli->getFd()
 		sendToClient(*cli, ":server 001 " + cli->getNickname() + " :Welcome to the IRC server!\r\n");
-//		std::cout << "<" << cli->getFd() << "> " << " authenticated as" << cli->getNickname() << std::endl;
+		std::cout << YELLOW_PALE << "<" << cli->getFd() << "> " << " Authenticated" << RESET << std::endl;
 	}
 }
 
@@ -407,9 +407,7 @@ void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
 
 	std::string newNick = tokens[1];
 
-
-//===========CHEQUEAR CON SERGIO SI NECESARIO============
-	// Validación básica: alfanumérico (puedes ampliar a RFC si quieres)
+	// Validación básica NICK: alfanumérico (puedes ampliar a RFC si quieres)
 	for (size_t i = 0; i < newNick.size(); ++i)
 	{
 		if (!std::isalnum(static_cast<unsigned char>(newNick[i])))
@@ -418,9 +416,8 @@ void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
 			return ;
 		}
 	}
-//========================================================
 
-	// Valida que no este registrado previamente
+	// Valida NICK que no este registrado previamente
 	for (size_t i = 0; i < _clients.size(); ++i)
 	{
 		if (_clients[i].getFd() != cli->getFd() && _clients[i].getNickname() == newNick)
@@ -458,7 +455,7 @@ void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
 	// Realname puede empezar desde tokens[4] si existe, unido; si no hay, usa tokens[3]
 	std::string realname;
 	if (tokens.size() >= 5) {
-		realname = joinFrom(tokens, 4, " ");
+		realname = Utils::joinFrom(tokens, 4, " ");
 	} else {
 		realname = tokens[3];
 	}
@@ -472,41 +469,14 @@ void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
 //	tryRegister(*cli);
 }
 
-// MOVIDO A UTILS
-// // Helper para dividir un string en tokens
-// std::vector<std::string> split(const std::string& str, char delim)
-// {
-//     std::vector<std::string> tokens;
-//     std::stringstream ss(str);
-//     std::string token;
-//     while (std::getline(ss, token, delim))
-//         tokens.push_back(token);
-//     return tokens;
-// }
-
-std::string Server::joinFrom(const std::vector<std::string>& v, size_t start, const std::string &sep)
-{
-    std::string out;
-    for (size_t i = start; i < v.size(); ++i)
-    {
-        if (i > start)
-            out += sep;
-        out += v[i];
-    }
-    return out;
-}
-
-
-
-
 
 //OJO solo para pruebas de joan
-void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
-{
-    (void)cli;
-    std::cout << tokens[0] << " command received" << std::endl;
-}
-/*
+// void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
+// {
+//     (void)cli;
+//     std::cout << tokens[0] << " command received" << std::endl;
+// }
+
 void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
 {
     if (tokens.size() < 2)//if (tokens.empty())
@@ -542,7 +512,7 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
                 sendToClient(*other, ":" + cli->getNickname() + " JOIN " + channelName + "\r\n");
         }
     }
-}*/
+}
 	
 //Temporal solo para pruebas de joan
 void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
@@ -634,7 +604,7 @@ Client* Server::getClientByNick(const std::string& nick)
     }
     return NULL; // no encontrado
 }
-
+// ELIMINADA
 // void Server::tryRegister(Client& client)
 // {
 //     if (client.isAuthenticated())
@@ -659,6 +629,7 @@ void Server::sendToClient(Client& client, const std::string& message)
     size_t totalSent = 0;
     size_t length = message.size();
 
+	//Reintenta envio si no se envia todo
     while (totalSent < length)
     {
         ssize_t sent = send(fd, buffer + totalSent, length - totalSent, 0);
@@ -670,12 +641,16 @@ void Server::sendToClient(Client& client, const std::string& message)
             {
 				std::cerr << "Error sending to client <" << fd << ">" << std::endl;
                 clearClient(fd); // ya tiene un close()
-				// close(fd); no va porque es un doble close()
+				// close(fd); no va porque seria un doble close()
                 return ;
             }
         }
         totalSent += sent;
-		std::cout << "<" << fd << "> " << GREEN << ">> " << RESET << message << std::endl;
+
+	// Mostrar mensaje en consola sin \r\n
+    std::cout << "<" << fd << "> " << GREEN << ">> " 
+              << RESET << Utils::stripCRLF(message) << std::endl;
+//		std::cout << "<" << fd << "> " << GREEN << ">> " << RESET << message << std::endl;
     }
 }
 

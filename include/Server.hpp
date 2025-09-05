@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <csignal>
-#include <cctype> // para toupper
+#include <cctype> 
 #include <cerrno>
 #include <iostream>
 #include <sstream>
@@ -22,20 +22,6 @@
 #include "Channel.hpp"
 #include "Client.hpp"
 #include "Utils.hpp"
-
-//MOVIDO A Utils.hpp
-// #define RESET   "\033[0m"
-// #define RED     "\033[31m"
-// #define GREEN   "\033[32m"
-// #define YELLOW  "\033[33m"
-// #define BLUE    "\033[34m"
-// #define MAGENTA "\033[35m"
-// #define CYAN    "\033[36m"
-// #define WHITE   "\033[37m"
-// // #define RED "\e[1;31m"
-//  #define WHI "\e[0;37m"
-//  #define GRE "\e[1;32m"
-// // #define YEL "\e[1;33m"
 
 
 class Server
