@@ -99,7 +99,6 @@ void Server::serverInit(int port, std::string& pwd)
 	closeFds(); 
 }
 /*
-// Elimina un cliente de _fds y de _clients y cierra su socket
 void Server::clearClient(int fd)
 {
     // Cierra primero, ignora errores
@@ -159,7 +158,12 @@ void Server::closeFds()
         _serverFd = -1;
     }
 
-    // Limpia estructuras (C++98 trick para liberar capacidad)
+    // Trick para limpiar estructuras (C++98)
+	//Creamos un vector temporal vacío de tipo Client. 
+	//Con swap() intercambiamos el contenido del vector temporal
+	// vacío con _clients. Ahora _clients está vacío. El vector 
+	//temporal (que contiene los datos antiguos) se destruye al 
+	//salir de la expresión → liberando su memoria.
     std::vector<Client>().swap(_clients);
     std::vector<struct pollfd>().swap(_fds);
 
@@ -254,7 +258,7 @@ void Server::receiveNewData(int fd)
 
 void Server::sendToClient(Client& client, const std::string& message)
 {
-    if (client.isMarkedForRemoval()) return; // No enviar nada
+    if (client.isMarkedForRemoval()) return; // Si el cliente se ha de eliminar, No enviarle nada
 
     int fd = client.getFd();
     const char* buffer = message.c_str();
@@ -351,7 +355,8 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 		command[i] = std::toupper(command[i]);
 		//command[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(command[i])));//uppercase seguro
 	}
-	// OJO: Los que querramos ignorar NO haria falta contemplarlos aqui
+	// OJO: Creo que los que querramos ignorar NO haria falta contemplarlos aqui
+	//COMANDOS MINIMOS A MANEJAR IMPUESTOS POR SUBJECT
 	if (command == "CAP" || command == "QUIT" || command == "CAP END") { // ignora estos comandos, CAP puede venir mas de una vez, creo
 		return ;
 	}
@@ -381,8 +386,8 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 // HANDSHAKE: autentica al cliente
 void Server::handshake(Client *cli, const std::string &cmd)
 {
-	if (cmd.empty())
-		return;
+	// if (cmd.empty())
+	// 	return;
 
 	std::vector<std::string> tokens = Utils::split(cmd, ' ');
 	if (tokens.empty())
@@ -619,12 +624,13 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
 }
 	
 //Temporal solo para pruebas de joan
+/*
 void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
 {
     (void)cli;
     std::cout << tokens[0] << " command received" << std::endl;
-}
-/*
+}*/
+
 void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
 {
     // 1. Validar parámetros
@@ -695,7 +701,7 @@ void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
         sendToClient(*targetClient, ":" + cli->getNickname() + " PRIVMSG " + target + " :" + message + "\r\n");
     }
 }
-*/
+
 
 Client* Server::getClientByNick(const std::string& nick)
 {
