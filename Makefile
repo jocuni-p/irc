@@ -1,48 +1,24 @@
-# Compiler settings
-CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++98
-
 NAME = ircserv
 
-# Directories
-SRC_DIR = src
-OBJ_DIR = obj
+CXX = c++
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -g
 
-# Source files
-SRCS = $(SRC_DIR)/main.cpp \
-       $(SRC_DIR)/Server.cpp \
-       $(SRC_DIR)/Client.cpp \
-       $(SRC_DIR)/Channel.cpp
+SRC = src/main.cpp src/Server.cpp src/Client.cpp src/Channel.cpp
+OBJ = $(SRC:.cpp=.o)
+INC = -Iinc
 
-# Object files
-OBJS = $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
-
-# Default target
 all: $(NAME)
 
-# Linking
-$(NAME): $(OBJS)
-	$(CXX) $(CXXFLAGS) $(OBJS) -o $(NAME)
+$(NAME): $(OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJ)
 
-# Compilation (crea obj/ si no existe)
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
-	@mkdir -p $(OBJ_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
 
-# Clean object files
 clean:
-	rm -rf $(OBJ_DIR)
+	rm -f $(OBJ)
 
-# Clean everything
 fclean: clean
 	rm -f $(NAME)
 
-# Rebuild everything
 re: fclean all
-
-# Ejecutar el servidor con parámetros de prueba
-run: $(NAME)
-	./$(NAME) 6667 password
-
-# Prevent conflicts with files named like our targets
-.PHONY: all clean fclean re run

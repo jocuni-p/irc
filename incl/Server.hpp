@@ -35,7 +35,6 @@ private:
     static bool                     _signalFlag;
     std::vector<Client>             _clients;
     std::vector<struct pollfd>      _fds;
-    //std::map<std::string, Channel>  _channels;
     std::vector<Channel>            _channels;
 
     Channel* getOrCreateChannel(const std::string& name);
