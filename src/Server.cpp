@@ -235,7 +235,7 @@ void Server::receiveNewData(int fd)
     // Creamos puntero al obj cliente y guardamos los datos en su buffer
     Client* cli = getClient(fd);
     if (!cli)
-	return;
+		return;
     cli->appendToBuffer(std::string(buff, bytes));
 	
 	// Obtiene todo lo que hay en buffer del cliente
@@ -270,7 +270,7 @@ void Server::sendToClient(Client& client, const std::string& message)
         ssize_t sent = send(fd, buffer + totalSent, length - totalSent, 0);
         if (sent <= 0) {
             if (errno == EWOULDBLOCK || errno == EAGAIN) break; // El socket no está listo → esperar y reintentar
-            clearClient(fd);
+			clearClient(fd);
             return;
         }
         totalSent += sent;
@@ -357,9 +357,18 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	}
 	// OJO: Creo que los que querramos ignorar NO haria falta contemplarlos aqui
 	//COMANDOS MINIMOS A MANEJAR IMPUESTOS POR SUBJECT
-	if (command == "CAP" || command == "QUIT" || command == "CAP END") { // ignora estos comandos, CAP puede venir mas de una vez, creo
+	if (command == "CAP" || command == "CAP END") { // ignora estos comandos si vuelven de nuevo
 		return ;
 	}
+	else if (command == "PASS") {
+		handlePass(cli, tokens);  // si lo envia de nuevo: cerrar conexion
+	}
+	// else if (command == "NICK") {
+	// 	//permitir cambio de nick. Enviar a handleNick y anyadir gestion del cambio
+	// }
+	// else if (command == "USER") {
+	// 	//responder con error 462
+	// }
 	else if (command == "JOIN") {
 		handleJoin(cli, tokens);
 	}
@@ -372,6 +381,9 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	else if (command == "MODE") {
 		handleMode(cli, tokens);
 	}
+	// else if (command == "QUIT") { //gestionar una eliminacion y borrado limpios del cliente}
+	// 	//handleQuit(cli, tokens);
+	// }
 	else {
 		std::cout << "Unknown command: " << cmd << std::endl;
 		//Aqui llegaran los comandos que maneja HexChat y nosotros no hemos contemplado por que subject no lo requiere
@@ -386,33 +398,20 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 // HANDSHAKE: autentica al cliente
 void Server::handshake(Client *cli, const std::string &cmd)
 {
-	// if (cmd.empty())
-	// 	return;
-
 	std::vector<std::string> tokens = Utils::split(cmd, ' ');
 	if (tokens.empty())
 		return;
 
 	std::string command = tokens[0];
-	//REVISAR CON SERGIO, creo que HexChat ya convierte a mayusculas si es comando
-	// std::transform(command.begin(), command.end(), command.begin(), ::toupper);
 
-//==========OPCIONAL - Checkear con Sergio=========//
-	// Convertir a mayúsculas por seguridad
-	// for (size_t i = 0; i < command.size(); ++i)
-	// {
-	// 	command[i] = std::toupper(command[i]);
-	// 	//command[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(command[i])));//uppercase seguro
-
-	// }
-//======================================================
+	//Convertir a mayúsculas por seguridad
+	for (size_t i = 0; i < command.size(); ++i)
+	{
+		command[i] = std::toupper(command[i]);
+		//command[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(command[i])));//uppercase seguro
+	}
 
 
-	// Cliente ya autenticado → salimos
-	// if (cli->getStatus() == AUTHENTICATED)
-	// 	return;
-
-	// Procesamos comandos de autenticación
 	if (command == "CAP" && cli->getStatus() == NOT_AUTHENTICATED)
 	{
 		handleCap(cli); //, tokens);
@@ -429,6 +428,8 @@ void Server::handshake(Client *cli, const std::string &cmd)
 	{
 		handleUser(cli, tokens);
 	}
+	else if (command == "CAP END") //Ignoramos este comando
+		return;
 	else
 	{
 		//sendToClient(cli->getFd(), "451 :You have not registered\r\n");
@@ -440,9 +441,9 @@ void Server::handshake(Client *cli, const std::string &cmd)
 	{
 		cli->setStatus(AUTHENTICATED);
 		//sendToClient(cli->getFd()
-		sendToClient(*cli, ":server 001 " + cli->getNickname() + " :Welcome to the IRC server!\r\n");
 		std::cout << YELLOW_PALE << "<" << cli->getFd() << "> " 
 					<< " Authenticated " << cli->getNickname() << RESET << std::endl;
+		sendToClient(*cli, ":server 001 " + cli->getNickname() + " :Welcome to the IRC server!\r\n");
 	}
 }
 
@@ -474,11 +475,12 @@ void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
 		//OJO: El server debe cerrar la conexion con el client aqui
 		return ;
 	}
-	// if (cli->isAuthenticated())
-	// {
-	// 	sendToClient(*cli, "462 :You may not reregister\r\n");
-	// 	return ;
-	// }
+
+	if (cli->getStatus() == AUTHENTICATED) { // Si ya estaba authenticado previamente
+		sendToClient(*cli, "462 :You may not reregister\r\n");
+		//Cerrar la conexion con este cliente
+	 	return ;
+	}
 
 	const std::string& passArg = tokens[1]; // puede venir con ':' delante en algunos clientes OJO: DEBATIR con Sergio
 	std::string pwd = passArg;
