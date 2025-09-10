@@ -310,7 +310,7 @@ void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
     
     if (!cli->hasPassAccepted())
     {
-        sendToClient(*cli, ":ircserv 464 " + target + " :You need to validate your password first\r\n");
+        sendToClient(*cli, ":ircserv 464 " + target + " :Password incorrect\r\n");
         return ;
     }
 
@@ -356,7 +356,7 @@ void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
 
     if (!cli->hasPassAccepted())
     {
-        sendToClient(*cli, ":ircserv 464 " + target + " :You need to validate your password first\r\n");
+        sendToClient(*cli, ":ircserv 464 " + target + " :Password incorrect\r\n");
         return ;
     }
     
@@ -395,8 +395,32 @@ void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
     tryRegister(*cli);
 }
 
-void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)////REVISAR!!!!!!!!!!
+
+
+//////Cuando elimines a un cliente (por desconexión o PART), tras hacer channel.removeClient(fd) debes comprobar:
+/*
+if (chan.getClients().empty()) {
+    _channels.erase(chan.getName());
+}
+*/
+
+void Server::handleJoin(Client *cli, const std::vector<std::string>& tokens)////REVISAR!!!!!!!!!!
 {
+    if (!cli)
+        return ;
+    
+    std::string target;
+    if (cli->getNickname().empty())
+        target = "*";
+    else
+        target = cli->getNickname();
+
+    if (!cli->isAuthenticated())
+    {
+        sendToClient(*cli, ":ircserv 451 " + target + " :You have not registered\r\n");
+        return ;
+    }
+    
     if (tokens.size() < 2)
     {
         sendToClient(*cli, "461 JOIN :Not enough parameters\r\n");
@@ -408,7 +432,7 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)////
     if (tokens.size() >= 3)
         keyArg = tokens[2]; // el cliente puede enviar la key
 
-    if (channelName[0] != '#')
+    if (channelName[0] != '#')/////Añadir restricciones!!!!!! (caracteres, longitud, etc)
     {
         sendToClient(*cli, "479 " + channelName + " :Illegal channel name\r\n");
         return ;
@@ -453,7 +477,7 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)////
     {
         if (*it != cli->getFd())
         {
-            Client* other = getClient(*it);
+            Client *other = getClient(*it);
             if (other)
                 sendToClient(*other, ":" + cli->getNickname() + " JOIN " + channelName + "\r\n");
         }
@@ -461,8 +485,23 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)////
 }
 
 
-void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
+void Server::handlePrivmsg(Client *cli, const std::vector<std::string>& tokens)
 {
+    if (!cli)
+        return ;
+    
+    std::string target;
+    if (cli->getNickname().empty())
+        target = "*";
+    else
+        target = cli->getNickname();
+
+    if (!cli->isAuthenticated())
+    {
+        sendToClient(*cli, ":ircserv 451 " + target + " :You have not registered\r\n");
+        return ;
+    }
+    
     // 1. Validar parámetros
     if (tokens.size() < 3)
     {
@@ -470,7 +509,8 @@ void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
         return ;
     }
 
-    std::string target = tokens[1];//tokens[0];  // puede ser nick o canal
+    //std::string
+    target = tokens[1];//tokens[0];  // puede ser nick o canal
     std::string message = tokens[2];
 
     // El mensaje puede empezar con ':' y tener espacios
