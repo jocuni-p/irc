@@ -539,10 +539,11 @@ void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
 		return ;
 		
 	std::string target;
-    if (cli->getNickname().empty())
+    if (cli->getNickname().empty()) {
         target = "*";
-    else
+	} else {
         target = cli->getNickname();
+	}
 	
 	if (tokens.size() < 2) {
 		sendToClient(*cli, ":ircserv 431 " + target + " :No nickname given\r\n");
@@ -550,10 +551,10 @@ void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
 	}
 
 	//No se si ponerlo o no??
-	if (tokens.size() > 2) {
-		sendToClient(*cli, ":ircserv 432 " + target + " :Erroneous nickname\r\n");
-		return ;
-	}
+	// if (tokens.size() > 2) {
+	// 	sendToClient(*cli, ":ircserv 432 " + target + " :Erroneous nickname\r\n");
+	// 	return ;
+	// }
 
 	std::string newNick = tokens[1];
 
@@ -578,11 +579,11 @@ void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
 	}
 
 	//ALTERNATIVA: consultar con Sergio
-	if (getClientByNick(newNick))// 433: nick ya en uso
-    {
-        sendToClient(*cli, ":ircserv 433 * " + newNick + " :Nickname is already in use\r\n");
-        return ;
-    }
+	// if (getClientByNick(newNick))// 433: nick ya en uso
+    // {
+    //     sendToClient(*cli, ":ircserv 433 * " + newNick + " :Nickname is already in use\r\n");
+    //     return ;
+    // }
 
 	cli->setNickname(newNick);
 	sendToClient(*cli, ":* NICK " + newNick + "\r\n");

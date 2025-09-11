@@ -3,6 +3,10 @@ NAME = ircserv
 CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -g
 
+# Directories
+SRC_DIR = src
+OBJ_DIR = obj
+
 # Source files
 SRCS = $(SRC_DIR)/main.cpp \
        $(SRC_DIR)/Server.cpp \
@@ -11,20 +15,31 @@ SRCS = $(SRC_DIR)/main.cpp \
 	   $(SRC_DIR)/Utils.cpp \
 	   $(SRC_DIR)/debug.cpp
 
+
+# Object files
+OBJS = $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
+
+# Default target
 all: $(NAME)
 
-$(NAME): $(OBJ)
-	$(CXX) $(CXXFLAGS) -o $@ $(OBJ)
+# Linking
+$(NAME): $(OBJS)
+	$(CXX) $(CXXFLAGS) $(OBJS) -o $(NAME)
 
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
+# Compilation (crea obj/ si no existe)
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+	@mkdir -p $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+# Clean object files
 clean:
-	rm -f $(OBJ)
+	rm -rf $(OBJ_DIR)
 
+# Clean everything
 fclean: clean
 	rm -f $(NAME)
 
+# Rebuild everything
 re: fclean all
 
 # Ejecutar el servidor con parámetros de prueba
