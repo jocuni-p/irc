@@ -11,6 +11,43 @@ void Server::signalHandler(int signum)
     Server::_signalFlag = true;
 }
 
+/*void Server::clearClient(int fd)
+{
+    for (size_t i = 0; i < _fds.size(); i++)
+    {
+        if (_fds[i].fd == fd)
+        {
+            _fds.erase(_fds.begin() + i);
+            break ;
+        }
+    }
+    for (size_t i = 0; i < _clients.size(); i++)
+    {
+        if (_clients[i].getFd() == fd)
+        {
+            _clients.erase(_clients.begin() + i);
+            break ;
+        }
+    }
+}*/
+
+void Server::removeEmptyChannels()
+{
+    for (size_t i = 0; i < _channels.size(); )
+    {
+        if (_channels[i].getClients().empty())
+        {
+            std::cout << "Eliminando canal vacío: " << _channels[i].getName() << std::endl;
+            _channels.erase(_channels.begin() + i);
+            // No incrementamos i, porque tras erase el siguiente canal pasa a ocupar esa posición
+        }
+        else
+        {
+            ++i;
+        }
+    }
+}
+
 void Server::clearClient(int fd)
 {
     for (size_t i = 0; i < _fds.size(); i++)
@@ -29,7 +66,16 @@ void Server::clearClient(int fd)
             break ;
         }
     }
+    for (size_t i = 0; i < _channels.size(); i++)
+    {   
+        if (_channels[i].isMember(fd))
+        {
+            _channels[i].removeClient(fd);
+        }
+    }
+    removeEmptyChannels();
 }
+
 
 void Server::closeFds()
 {
@@ -229,9 +275,8 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
         command[i] = std::toupper(command[i]);
     
     // 2. Enrutamos según comando
-    if (command == "CAP" || command == "QUIT")
-        return ;
-
+    //if (command == "CAP" || command == "QUIT")
+    //    return ;
     if (command == "PASS") {
         handlePass(cli, tokens);
     }
@@ -254,8 +299,9 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
         handleMode(cli, tokens);
     }
     else {
-        std::cout << RED << "Unknown command: " << cmd << WHI << std::endl;
+        // std::cout << RED << "Unknown command: " << cmd << WHI << std::endl;
         // Aquí luego podemos enviar un error al cliente
+        return ;
     }
 }
 
@@ -585,7 +631,7 @@ Client* Server::getClientByNick(const std::string& nick)
     return NULL; // no encontrado
 }
 
-void Server::tryRegister(Client& client)
+/*void Server::tryRegister(Client& client)
 {
 
     if (client.isAuthenticated())
@@ -601,6 +647,96 @@ void Server::tryRegister(Client& client)
     }
     else
         sendToClient(client, "451 :You have not registered\r\n");
+}*/
+/*
+void Server::tryRegister(Client& client)
+{
+    if (client.isAuthenticated())
+        return;
+
+    if (client.hasPassAccepted() && !client.getNickname().empty() && !client.getUsername().empty())
+    {
+        client.setAuthenticated(true);
+
+        std::string nick = client.getNickname();
+
+        // 001 RPL_WELCOME
+        sendToClient(client, ":ircserv 001 " + nick + " :Welcome to the IRC server, " +
+                                nick + "!" + client.getUsername() + "@localhost\r\n");
+
+        // 002 RPL_YOURHOST
+        sendToClient(client, ":ircserv 002 " + nick +
+                                " :Your host is ircserv, running version 1.0.0\r\n");
+
+        // 003 RPL_CREATED
+        sendToClient(client, ":ircserv 003 " + nick +
+                                " :This server was created Tue Sep 10 2025 at 12:00:00 UTC\r\n");
+
+        // 004 RPL_MYINFO
+        // user modes = "io", channel modes = "imnpst", channel modes with params = "bkloveqjfI"
+        sendToClient(client, ":ircserv 004 " + nick +
+                                " ircserv 1.0.0 io imnpst bkloveqjfI\r\n");
+
+        // 005 RPL_ISUPPORT
+        sendToClient(client, ":ircserv 005 " + nick +
+                                " CHANTYPES=# PREFIX=(ov)@+ NICKLEN=30 MAXCHANNELS=20 :are supported by this server\r\n");
+
+        std::cout << GRE << "Client <" << client.getFd() << "> authenticated as "
+                  << nick << WHI << std::endl;
+    }
+    else
+    {
+        // aún no completó PASS/NICK/USER
+        std::string target;
+        if (client.getNickname().empty())
+            target = "*";
+        else
+            target = client.getNickname();
+        sendToClient(client, ":ircserv 451 " + target + " :You have not registered\r\n");
+    }
+}*/
+void Server::sendWelcomeMessages(Client& client)
+{
+    std::string nick = client.getNickname();
+
+    // 001 RPL_WELCOME
+    sendToClient(client, ":ircserv 001 " + nick + " :Welcome to the IRC server, " +
+                            nick + "!" + client.getUsername() + "@localhost\r\n");
+
+    // 002 RPL_YOURHOST
+    sendToClient(client, ":ircserv 002 " + nick +
+                            " :Your host is ircserv, running version 1.0.0\r\n");
+
+    // 003 RPL_CREATED
+    sendToClient(client, ":ircserv 003 " + nick +
+                            " :This server was created Tue Sep 10 2025 at 12:00:00 UTC\r\n");
+
+    // 004 RPL_MYINFO
+    sendToClient(client, ":ircserv 004 " + nick +
+                            " ircserv 1.0.0 io imnpst bkloveqjfI\r\n");
+
+    // 005 RPL_ISUPPORT (puedes añadir más líneas si quieres)
+    sendToClient(client, ":ircserv 005 " + nick +
+                            " CHANTYPES=# PREFIX=(ov)@+ NICKLEN=30 MAXCHANNELS=20 :are supported by this server\r\n");
+}
+
+void Server::tryRegister(Client& client)
+{
+    if (client.isAuthenticated())
+        return;
+
+    if (client.hasPassAccepted() && !client.getNickname().empty() && !client.getUsername().empty())
+    {
+        client.setAuthenticated(true);
+        sendWelcomeMessages(client);
+
+        std::cout << GRE << "Client <" << client.getFd() << "> authenticated as "
+                  << client.getNickname() << WHI << std::endl;
+    }
+    else
+    {
+        sendToClient(client, ":ircserv 451 * :You have not registered\r\n");
+    }
 }
 
 void Server::sendToClient(Client& client, const std::string& message)

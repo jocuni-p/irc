@@ -55,6 +55,7 @@ private:
     void handleMode(Client* cli, const std::vector<std::string>& tokens);
 
     void sendToClient(Client& client, const std::string& message);
+    void sendWelcomeMessages(Client& client);
 
 public:
     Server();
@@ -64,6 +65,7 @@ public:
     void receiveNewData(int fd);
     void closeFds();
     void clearClient(int fd);
+    void removeEmptyChannels();
   //void sendToClient(Client& client, const std::string& message);
 
     static void signalHandler(int signum);
