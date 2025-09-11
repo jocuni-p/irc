@@ -1,5 +1,5 @@
 #include <iostream>
-#include "../include/debug.hpp"
+#include "debug.hpp"
 
 
 

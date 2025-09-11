@@ -6,6 +6,7 @@ CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -g
 # Directories
 SRC_DIR = src
 OBJ_DIR = obj
+INC = -Iinclude
 
 # Source files
 SRCS = $(SRC_DIR)/main.cpp \
@@ -29,7 +30,7 @@ $(NAME): $(OBJS)
 # Compilation (crea obj/ si no existe)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(OBJ_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
 
 # Clean object files
 clean:

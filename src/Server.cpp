@@ -1,4 +1,4 @@
-#include "../include/Server.hpp"
+#include "Server.hpp"
 
 
 bool Server::_signalFlag = false;
@@ -789,7 +789,7 @@ void Server::handlePrivmsg(Client *cli, const std::vector<std::string>& tokens)
         Client* targetClient = getClientByNick(target);
         if (!targetClient)
         {
-            sendToClient(*cli, ":localhost 401 " + cli->getNickname() + " " + target + " :No such nick\r\n");
+            sendToClient(*cli, ":ircserv 401 " + cli->getNickname() + " " + target + " :No such nick\r\n");
             return ;
         }
         //sendToClient(*targetClient, ":" + cli->getNickname() + " PRIVMSG " + target + " :" + message + "\r\n");

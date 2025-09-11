@@ -1,4 +1,4 @@
-#include "../include/Utils.hpp"
+#include "Utils.hpp"
 
 
 bool Utils::isValidPasswordArg(const std::string &password) {
