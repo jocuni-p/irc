@@ -24,7 +24,6 @@
 // #define YEL "\e[1;33m"
 
 
-
 class Utils {
 	public:
 		static bool isValidPortArg(int const& port);
