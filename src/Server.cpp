@@ -512,12 +512,13 @@ void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
 	 	return ;
 	}
 
-	//NO HARIA FALTA CON HEXCHAT
-	// const std::string& passArg = tokens[1]; // puede venir con ':' delante en algunos clientes OJO: DEBATIR con Sergio
-	// std::string pwd = passArg;
-	// // Elimina ':' si preceden a la password
-	// if (!pwd.empty() && pwd[0] == ':')
-	// 	pwd.erase(0, 1);
+	const std::string& passArg = tokens[1]; // puede venir con ':' delante en algunos clientes OJO: DEBATIR con Sergio
+	std::string pwd = passArg;
+
+	//NO HARIA FALTA CON HEXCHAT: valorar con Sergio
+	// Elimina ':' si preceden a la password
+	if (!pwd.empty() && pwd[0] == ':')
+		pwd.erase(0, 1);
 
 	if (_password != pwd) {
 		sendToClient(*cli, ":ircserv 464 " + target + " :Password incorrect\r\n");
@@ -718,11 +719,11 @@ void Server::handlePrivmsg(Client *cli, const std::vector<std::string>& tokens)
     else
         target = cli->getNickname();
 
-    if (!cli->isAuthenticated())
-    {
-        sendToClient(*cli, ":ircserv 451 " + target + " :You have not registered\r\n");
-        return ;
-    }
+    // if (!cli->isAuthenticated())
+    // {
+    //     sendToClient(*cli, ":ircserv 451 " + target + " :You have not registered\r\n");
+    //     return ;
+    // }
     
     // 1. Validar parámetros
     if (tokens.size() < 3)
