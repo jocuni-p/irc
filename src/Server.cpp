@@ -85,19 +85,40 @@ void Server::serverInit(int port, std::string& pwd)
 		// Limpia clientes marcados para borrado
 		for (int i = static_cast<int>(_clients.size()) - 1; i >= 0; --i) {
 			if (_clients[i].isMarkedForRemoval()) {
-				// Buscar y eliminar fd en _fds
+				int fd = _clients[i].getFd();
+
+				// Buscarlo y eliminarlo de _fds
 				for (size_t j = 0; j < _fds.size(); ++j) {
-					if (_fds[j].fd == _clients[i].getFd()) {
+					if (_fds[j].fd == fd) {
 						_fds.erase(_fds.begin() + j);
 						break;
 					}
 				}
+
+				// Eliminarlo de todos los canales
+				for (size_t c = 0; c < _channels.size();  ) { // <--incremento manual
+					_channels[c].removeClient(fd); //solo borra si lo encuentra
+
+					// si es el unico en el canal, borra tambien el canal
+					if (_channels[c].getClients().empty()) {
+						_channels.erase(_channels.begin() + c);
+						continue; // no incrementa c porque el vector se ha desplazado
+					}
+					++c;
+				}
+
+				//Eliminarlo de _clients
 				_clients.erase(_clients.begin() + i);
 			}
 		}
+		printClients(_clients);
+		printChannels(_channels);
 	}
 	closeFds(); 
 }
+
+
+
 /*
 void Server::clearClient(int fd)
 {
@@ -124,12 +145,14 @@ void Server::clearClient(int fd)
 	std::cout << YELLOW_PALE << "<" << fd << "> Disconnected" << RESET << std::endl;
 }
 */
+
+//Cierra socket limpiamente, marca cliente para ser borrado, y lo informa en consola
 void Server::clearClient(int fd)
 {
     Client* cli = getClient(fd);
     if (!cli) return;
 
-    cli->markForRemoval(); // marcar para borrado
+    cli->markForRemoval(); // lo marca con 'true' para borrado
     shutdown(fd, SHUT_RDWR);
     close(fd);
 
@@ -164,10 +187,15 @@ void Server::closeFds()
 	// vacío con _clients. Ahora _clients está vacío. El vector 
 	//temporal (que contiene los datos antiguos) se destruye al 
 	//salir de la expresión → liberando su memoria.
+	//No es necesario recorrer los vectores para “cerrar” nada 
+	//porque los no tienen sockets propios. Sólo contienen sets,
+	//bools, int y strings, que se liberan automáticamente al 
+	//destruirse los objetos.
     std::vector<Client>().swap(_clients);
     std::vector<struct pollfd>().swap(_fds);
+	std::vector<Channel>().swap(_channels);
 
-    std::cout << GREEN << "** IRC Server shutdown gracefully **" << RESET << std::endl;
+	std::cout << GREEN << "** IRC Server shutdown gracefully **" << RESET << std::endl;
 }
 
 
@@ -372,6 +400,9 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	else if (command == "JOIN") {
 		handleJoin(cli, tokens);
 	}
+	else if (command == "WHO") {
+		
+	}
 	else if (command == "PRIVMSG") {
 		handlePrivmsg(cli, tokens);
 	}
@@ -381,9 +412,9 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	else if (command == "MODE") {
 		handleMode(cli, tokens);
 	}
-	// else if (command == "QUIT") { //gestionar una eliminacion y borrado limpios del cliente}
-	// 	//handleQuit(cli, tokens);
-	// }
+	else if (command == "QUIT") { //gestionar una eliminacion y borrado limpios del cliente
+	 	clearClient(cli->getFd()); // cierra socket,lo marca para eliminarlo de _fds, _clients, _channels y lo informa en consola 
+	}
 	else {
 		std::cout << "Unknown command: " << cmd << std::endl;
 		//Aqui llegaran los comandos que maneja HexChat y nosotros no hemos contemplado por que subject no lo requiere
@@ -704,6 +735,11 @@ void Server::handlePrivmsg(Client* cli, const std::vector<std::string>& tokens)
     }
 }
 
+// void Server::handleQuit(Client* cli) {
+// 	clearClient(pasarle el fd);
+// 	// marcamos para borrar
+// }
+
 
 Client* Server::getClientByNick(const std::string& nick)
 {
@@ -857,9 +893,7 @@ void Server::handleMode(Client* cli, const std::vector<std::string>& tokens)
         sendToClient(*cli, "403 " + target + " :No such channel\r\n");
         return ;
     }
-
-    // Si no hay flags → mostrar modos actuales
-    if (tokens.size() == 2)
+	
     {
         std::string modes;
         //if (chan->isModeT()) modes += "t";

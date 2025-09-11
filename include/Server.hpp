@@ -22,6 +22,7 @@
 #include "Channel.hpp"
 #include "Client.hpp"
 #include "Utils.hpp"
+#include "debug.hpp"
 
 
 class Server
@@ -33,7 +34,6 @@ private:
     static bool                     _signalFlag;
     std::vector<Client>             _clients;
     std::vector<struct pollfd>      _fds;
-    //std::map<std::string, Channel>  _channels;
     std::vector<Channel>            _channels;
 
     Channel* getOrCreateChannel(const std::string& name);
