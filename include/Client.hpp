@@ -8,6 +8,7 @@ enum LoginStatus {
 	CAP_NEGOTIATED,
     PASS_OK,
     NICK_OK,
+	NICK_AGAIN,
     USER_OK,
     AUTHENTICATED
 };

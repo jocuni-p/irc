@@ -111,8 +111,8 @@ void Server::serverInit(int port, std::string& pwd)
 				_clients.erase(_clients.begin() + i);
 			}
 		}
-		printClients(_clients);
-		printChannels(_channels);
+		printClients(_clients); // DEBUG
+		// printChannels(_channels); // DEBUG
 	}
 	closeFds(); 
 }
@@ -349,7 +349,7 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	if (cmd.empty())
 		return ;
 
-	if (cli->getStatus() != AUTHENTICATED)
+	if (cli->getStatus() != AUTHENTICATED) // || cli->getStatus() != NICK_AGAIN) //Si fallo el 1er Nick, maneja 2nd y 3rd
 	{
 		handshake(cli, cmd);
 		return;
@@ -391,13 +391,14 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	else if (command == "PASS") { // No se deberia poder cambiar
 		handlePass(cli, tokens);  // si lo envia de nuevo: cerrar conexion
 	}
-	// else if (command == "NICK") {
-	// 	//permitir cambio de nick. Enviar a handleNick y anyadir gestion del cambio
-	// }
-	// else if (command == "USER") {
-	// 	//responder con error 462
-	// }
-	else if (command == "JOIN") {
+	else if (command == "NICK") { // permitir cambio de nick
+		handleNick(cli, tokens);
+	}
+	else if (command == "USER") {
+		return;
+	}
+	else if (command == "JOIN")
+	{
 		handleJoin(cli, tokens);
 	}
 	else if (command == "WHO") {
@@ -447,11 +448,11 @@ void Server::handshake(Client *cli, const std::string &cmd)
 	{
 		handlePass(cli, tokens);
 	}
-	else if (command == "NICK" && cli->getStatus() == PASS_OK)
+	else if (command == "NICK" && (cli->getStatus() == PASS_OK || cli->getStatus() == NICK_AGAIN))
 	{
 		handleNick(cli, tokens);
 	}
-	else if (command == "USER" && cli->getStatus() == NICK_OK)
+	else if (command == "USER" && (cli->getStatus() == NICK_OK || cli->getStatus() == NICK_AGAIN))
 	{
 		handleUser(cli, tokens);
 	}
@@ -550,21 +551,20 @@ void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
 		return ;
 	}
 
-	//No se si ponerlo o no??
-	// if (tokens.size() > 2) {
-	// 	sendToClient(*cli, ":ircserv 432 " + target + " :Erroneous nickname\r\n");
-	// 	return ;
-	// }
-
 	std::string newNick = tokens[1];
-
-	// Validación básica NICK: alfanumérico
+	
+	// Validacion basica caracteres del NICK
 	for (size_t i = 0; i < newNick.size(); ++i)
 	{
-		if (!std::isalnum(static_cast<unsigned char>(newNick[i])))
-		{
+		unsigned char ch = static_cast<unsigned char>(newNick[i]);
+
+		if (i > 14 || (!std::isalnum(ch) && ch != '[' && ch != ']' && ch != '{' \
+			&& ch != '}' && ch != '\\' && ch != '|' && ch != '_')) {
 			sendToClient(*cli, ":ircserv 432 " + newNick + " :Erroneous nickname\r\n");
-			return ;
+			//Si llega aqui setear flag como NICK_AGAIN, seguir a handleUser, 
+			//guardar USER, y cuando vuelva a entrar Nick volvera a pasar por handleNick
+			cli->setStatus(NICK_AGAIN);
+			return;
 		}
 	}
 
@@ -589,7 +589,11 @@ void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
 	sendToClient(*cli, ":* NICK " + newNick + "\r\n");
 	//Alternativa: valorar con Sergio
 	//sendToClient(*cli, ":ircserv NOTICE AUTH :Nickname set to " + newNick + "\r\n");
-	cli->setStatus(NICK_OK);
+	if (cli->getStatus() == NICK_AGAIN) {
+		cli->setStatus(USER_OK);
+	} else {
+		cli->setStatus(NICK_OK);
+	}
 //	tryRegister(*cli);
 }
 
@@ -598,13 +602,21 @@ void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
 	if (!cli)
 		return ;
 
-	std::string nick;
-	nick = cli->getNickname();
+	std::string target;
+    if (cli->getNickname().empty()) {
+        target = "*";
+	}
+    else {
+        target = cli->getNickname();
+	}
+
+	// std::string nick;
+	// nick = cli->getNickname();
 
 	// USER <username> <mode> <unused> :<realname with spaces>
 	if (tokens.size() < 4)
 	{
-		sendToClient(*cli, ":ircserv 461 " + nick + " USER :Not enough parameters\r\n");
+		sendToClient(*cli, ":ircserv 461 " + target + " USER :Not enough parameters\r\n");
 		return ;
 	}
 	// if (cli->isAuthenticated())
@@ -626,8 +638,11 @@ void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
 		realname.erase(0, 1);
 	
 	cli->setRealname(realname);
-	
-	cli->setStatus(USER_OK);
+
+	if (cli->getStatus() == NICK_AGAIN)
+		return;
+	else
+		cli->setStatus(USER_OK);
 
 //	tryRegister(*cli);
 }
