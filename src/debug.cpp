@@ -35,10 +35,11 @@ void printClients(const std::vector<Client>& _clients) {
     std::cout << "---- Lista de clientes ----" << std::endl;
     for (size_t i = 0; i < _clients.size(); ++i) {
 		if (_clients[i].getStatus() == AUTHENTICATED) {
-        	std::cout << "Cliente " << i << " FD=" << _clients[i].getFd() << std::endl;
+        	std::cout << "Cliente " << i << " FD=" << _clients[i].getFd() 
+			<< " " << _clients[i].getNickname() << std::endl;
     	} else {
-			std::cout << "Cliente " << i << " FD=" << _clients[i].getFd()
-					  << " NOT AUTHENTICATED" << std::endl;
+			std::cout << "Cliente " << i << " FD=" << _clients[i].getFd() 
+			<< " " << _clients[i].getNickname() << " NOT_AUTHENTICATED" << std::endl;
 		}
 	}
 }

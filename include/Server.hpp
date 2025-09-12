@@ -41,7 +41,8 @@ private:
     // Helpers / parser
     Client* getClient(int fd);
     Client* getClientByNick(const std::string& nick);
-    void parseCommand(Client* cli, const std::string& cmd);
+	Channel *getChannelByName(const std::string &name);
+	void parseCommand(Client *cli, const std::string &cmd);
 	void handshake(Client *cli, const std::string &cmd);
 //    void tryRegister(Client& client);
 
@@ -51,8 +52,9 @@ private:
     void handleNick(Client* cli, const std::vector<std::string>& tokens);
     void handleUser(Client* cli, const std::vector<std::string>& tokens);
     void handleJoin(Client* cli, const std::vector<std::string>& tokens);
-    void handlePrivmsg(Client* cli, const std::vector<std::string>& tokens);
-    void handleTopic(Client* cli, const std::vector<std::string>& tokens);
+	void handleWho(Client *cli, const std::vector<std::string> &tokens);
+	void handlePrivmsg(Client *cli, const std::vector<std::string> &tokens);
+	void handleTopic(Client* cli, const std::vector<std::string>& tokens);
     void handleMode(Client* cli, const std::vector<std::string>& tokens);
 
     void sendToClient(Client& client, const std::string& message);

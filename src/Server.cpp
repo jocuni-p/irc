@@ -111,7 +111,7 @@ void Server::serverInit(int port, std::string& pwd)
 				_clients.erase(_clients.begin() + i);
 			}
 		}
-		printClients(_clients); // DEBUG
+		// printClients(_clients); // DEBUG
 		// printChannels(_channels); // DEBUG
 	}
 	closeFds(); 
@@ -205,10 +205,10 @@ void Server::acceptNewClient()
     struct sockaddr_in cliAdd;
     socklen_t len = sizeof(cliAdd);
     int newFd = accept(_serverFd, (sockaddr *)&cliAdd, &len);
-    if (newFd == -1) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return; // nada que aceptar
+    if (newFd == -1) { // si accept da -1 => no hay nada ahora, pues salgo de la funcion
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return; 
 		std::perror("(!) ERROR:  accept()");
-        return; // no continúes con fd inválido
+        return; // no continua con fd invalido
 //		throw std::runtime_error("(!) ERROR:  accept()"); ??? NO SE SI LANZAR EL PERROR O LA EXCEPTION
     }
 
@@ -401,8 +401,8 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	{
 		handleJoin(cli, tokens);
 	}
-	else if (command == "WHO") {
-		
+	else if (command == "WHO") { //Refresca datos, OJO podemos configurar HexChat para que no lo lance
+		handleWho(cli, tokens);
 	}
 	else if (command == "PRIVMSG") {
 		handlePrivmsg(cli, tokens);
@@ -456,7 +456,7 @@ void Server::handshake(Client *cli, const std::string &cmd)
 	{
 		handleUser(cli, tokens);
 	}
-	else if (command == "CAP END") //Ignoramos este comando
+	else if (command == "CAP END") //&& cli->getStatus() == USER_OK) //Ignoramos este comando
 		return;
 	else
 	{
@@ -707,10 +707,11 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
     bool isFirst = chan->getClients().empty();
     chan->addClient(cli->getFd(), isFirst);
 
-    // Aviso al propio cliente
-    sendToClient(*cli, ":" + cli->getNickname() + " JOIN " + channelName + "\r\n");
+    // Avisar JOIN al propio cliente y a los demas
+    std::string joinMsg = ":" + cli->getNickname() + "!" + cli->getUsername() +
+                          "@" + cli->getIp() + " JOIN " + channelName + "\r\n";
 
-    // Aviso a los demás en el canal
+    sendToClient(*cli, joinMsg);
     const std::set<int>& members = chan->getClients();
     for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
     {
@@ -718,10 +719,111 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
         {
             Client *other = getClient(*it);
             if (other)
-                sendToClient(*other, ":" + cli->getNickname() + " JOIN " + channelName + "\r\n");
+                sendToClient(*other, joinMsg);
         }
     }
+
+    // (Opcional) Topic actual ---
+    if (chan->hasTopic())
+    {
+        sendToClient(*cli, ":ircserv 332 " + cli->getNickname() + " " + channelName +
+                              " :" + chan->getTopic() + "\r\n");
+    }
+    sendToClient(*cli, ":ircserv 333 " + cli->getNickname() + " " + channelName +
+                          " " + cli->getNickname() + " 0\r\n");
+
+    // Lista de nicks inicial(RPL_NAMREPLY + RPL_ENDOFNAMES)
+    std::ostringstream names;
+    names << ":ircserv 353 " << cli->getNickname() << " = " << channelName << " :";
+
+    for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
+    {
+        Client *m = getClient(*it);
+        if (!m) continue;
+        if (chan->isOperator(*it))
+            names << "@" << m->getNickname() << " ";
+        else
+            names << m->getNickname() << " ";
+    }
+    names << "\r\n";
+    sendToClient(*cli, names.str());
+
+    sendToClient(*cli, ":ircserv 366 " + cli->getNickname() + " " + channelName +
+                          " :End of NAMES list\r\n");
 }
+
+
+// Busca un canal por nombre en _channels
+Channel* Server::getChannelByName(const std::string &name)
+{
+    for (size_t i = 0; i < _channels.size(); ++i)
+    {
+        if (_channels[i].getName() == name)
+            return &_channels[i];
+    }
+    return NULL;
+}
+//Periodicamente HexChat lanza un WHO para actualizar lista de clientes del canal
+//Se puede configurar HexChat para que NO lo lance y muestre solo los que habia al entrar
+void Server::handleWho(Client *cli, const std::vector<std::string> &tokens)
+{
+    if (tokens.size() < 2)
+        return; // WHO sin argumento
+
+    const std::string &channelName = tokens[1];
+    Channel *chan = getChannelByName(channelName);
+
+    // Si no hay canal, enviar solo fin de WHO vacio
+    if (!chan)
+    {
+        std::ostringstream end;
+        end << ":" << "ircserv"
+            << " 315 " << cli->getNickname()
+            << " " << channelName << " :End of WHO list\r\n";
+        sendToClient(*cli, end.str());
+        return;
+    }
+
+    // Recorremos los fd de los miembros del canal
+    const std::set<int> &members = chan->getClients();
+    for (std::set<int>::const_iterator it = members.begin();
+         it != members.end(); ++it)
+    {
+        int memberFd = *it;
+        Client *member = getClient(memberFd);
+        if (!member)
+            continue;
+
+        // Flags: H (here) y @ si es operador
+        std::string flags = "H";
+        if (chan->isOperator(memberFd))
+            flags += "@";
+
+        std::ostringstream reply;
+        reply << ":" << "ircserv"
+              << " 352 " << cli->getNickname()    // el que envio el WHO
+              << " " << channelName               // canal
+              << " " << member->getUsername()     // <usuario>
+              << " " << member->getIp()           // <host>
+              << " " << "ircserv"      // servidor
+              << " " << member->getNickname()     // <nick>
+              << " " << flags                     // <flags>
+              << " :0 " << member->getRealname()  // hopcount y realname
+              << "\r\n"; //OJO creo que // ya lo anyadimos en sendToClient()
+
+        sendToClient(*cli, reply.str());
+    }
+
+    // Fin de WHO list
+    std::ostringstream end;
+    end << ":" << "ircserv"
+        << " 315 " << cli->getNickname()
+        << " " << channelName << " :End of WHO list\r\n"; //OJO creo que // ya lo anyadimos en sendToClient()
+    sendToClient(*cli, end.str());
+}
+
+
+
 
 
 void Server::handlePrivmsg(Client *cli, const std::vector<std::string>& tokens)
