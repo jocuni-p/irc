@@ -16,7 +16,7 @@ private:
     bool            _modeL;     // User Limit (+/- l)
     std::set<int>   _clients;   // fds de clientes
     std::set<int>   _operators; // fds de operadores
-//  std::set<int>   _invited; // opcional, para manejar a quién se ha invitado
+    std::set<int>   _invited; // opcional, para manejar a quién se ha invitado
 
 public:
     Channel(const std::string& name);
@@ -53,6 +53,13 @@ public:
     void removeClient(int fd);
     bool isMember(int fd) const;
     bool isOperator(int fd) const;
+
+    void addOperator(int fd);
+    void removeOperator(int fd);
+
+    void inviteClient(int fd);
+    bool isInvited(int fd) const;
+    void removeInvite(int fd);
 
     const std::set<int>& getClients() const;
 };

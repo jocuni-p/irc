@@ -38,6 +38,7 @@ private:
     std::vector<Channel>            _channels;
 
     Channel* getOrCreateChannel(const std::string& name);
+    Channel* findChannel(const std::string& channelName);
 
     // Helpers / parser
     Client* getClient(int fd);
@@ -53,9 +54,21 @@ private:
     void handlePrivmsg(Client* cli, const std::vector<std::string>& tokens);
     void handleTopic(Client* cli, const std::vector<std::string>& tokens);
     void handleMode(Client* cli, const std::vector<std::string>& tokens);
+    void handleKick(Client* cli, const std::vector<std::string>& tokens);
+    void handleInvite(Client* cli, const std::vector<std::string>& tokens);
 
     void sendToClient(Client& client, const std::string& message);
     void sendWelcomeMessages(Client& client);
+    
+    bool checkOperator(Client *cli, Channel *chan, const std::string& target);
+    void showChannelModes(Client *cli, Channel *chan, const std::string& target);
+    void broadcastModeChange(Channel *chan, Client *cli,
+									const std::string& target,
+									const std::string& appliedModes,
+									const std::vector<std::string>& appliedArgs);
+	void applyChannelModes(Client* cli, Channel* chan,
+							const std::vector<std::string>& tokens,
+							const std::string& target) ;
 
 public:
     Server();
