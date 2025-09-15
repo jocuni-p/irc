@@ -119,32 +119,7 @@ void Server::serverInit(int port, std::string& pwd)
 
 
 
-/*
-void Server::clearClient(int fd)
-{
-    // Cierra primero, ignora errores
-    if (fd >= 0) {
-        shutdown(fd, SHUT_RDWR); // mejor esfuerzo; ignora error si ya está cerrado
-        close(fd);
-    }
 
-    // Lo elimina de _fds
-    for (size_t i = 0; i < _fds.size(); ++i) {
-        if (_fds[i].fd == fd) {
-            _fds.erase(_fds.begin() + i);
-            break;
-        }
-    }
-    // Lo elimina de _clients
-    for (size_t i = 0; i < _clients.size(); ++i) {
-        if (_clients[i].getFd() == fd) {
-            _clients.erase(_clients.begin() + i);
-            break;
-        }
-    }
-	std::cout << YELLOW_PALE << "<" << fd << "> Disconnected" << RESET << std::endl;
-}
-*/
 
 //Cierra socket limpiamente, marca cliente para ser borrado, y lo informa en consola
 void Server::clearClient(int fd)
@@ -160,7 +135,8 @@ void Server::clearClient(int fd)
 }
 
 
-//Cierre total de estructuras y sockets limpiamente
+
+
 void Server::closeFds()
 {
     // Cierra clientes (forma limpia)
@@ -306,41 +282,11 @@ void Server::sendToClient(Client& client, const std::string& message)
         }
         totalSent += sent;
     }
-	// Muestra mensaje en consola sin \r\n
+	// Muestra mensaje en consif (cli->getStatus() != AUTHENTICATED)ola sin \r\n
     std::cout << "<" << fd << "> " << GREEN << ">> " 
               << RESET << Utils::stripCRLF(message) << std::endl;
 }
 
-/* ELIMINADA
-void Server::sendToClient(Client& client, const std::string& message)
-{
-    int fd = client.getFd();
-    const char* buffer = message.c_str();
-    size_t totalSent = 0;
-    size_t length = message.size();
-
-    while (totalSent < length)
-    {
-        ssize_t sent = send(fd, buffer + totalSent, length - totalSent, 0);
-        if (sent <= 0)
-        {
-            if (errno == EWOULDBLOCK || errno == EAGAIN)
-            {
-                // El socket no está listo → esperar y reintentar
-                break ;
-            }
-            else
-            {
-                std::cerr << RED << "Error sending to client <" << fd << ">" << WHI << std::endl;
-                //removeClient(fd); // cerrar la conexión
-                clearClient(fd);
-                close(fd);
-                return ;
-            }
-        }
-        totalSent += sent;
-    }
-} */
 
 
 
@@ -403,6 +349,9 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	}
 	else if (command == "WHO") { //Refresca datos, OJO podemos configurar HexChat para que no lo lance
 		handleWho(cli, tokens);
+	}
+	else if (command == "KICK") {
+		handleKick(cli, tokens);
 	}
 	else if (command == "PRIVMSG") {
 		handlePrivmsg(cli, tokens);
@@ -471,14 +420,46 @@ void Server::handshake(Client *cli, const std::string &cmd)
 		//sendToClient(cli->getFd()
 		std::cout << YELLOW_PALE << "<" << cli->getFd() << "> " 
 					<< " Authenticated " << cli->getNickname() << RESET << std::endl;
-		sendToClient(*cli, ":server 001 " + cli->getNickname() + " :Welcome to the IRC server!\r\n");
+		sendToClient(*cli, ":ircserv 001 " 	+ cli->getNickname() 
+											+ " :Welcome to the IRC server " 
+											+ cli->getNickname() + "!\r\n");
+
+//		sendWelcomeMessages(*cli); //Desreferencio el puntero cli para pasarlo como referencia
 	}
 }
+//DEBATIR CON SERGIO: esto no lo pide el subject y esta hardcodeado
+/*
+void Server::sendWelcomeMessages(Client& client)
+{
+    std::string nick = client.getNickname();
 
-//RESPUESTA SOBRE LA LSITA DE CAPACIDADES QUE SOPORTA EL SERVER
+    // 001 RPL_WELCOME
+    sendToClient(client, ":ircserv 001 " + nick + " :Welcome to the IRC server, " +
+                            nick + "!" + client.getUsername() + "@localhost\r\n");
+
+    // 002 RPL_YOURHOST
+    sendToClient(client, ":ircserv 002 " + nick +
+                            " :Your host is ircserv, running version 1.0.0\r\n");
+
+    // 003 RPL_CREATED
+    sendToClient(client, ":ircserv 003 " + nick +
+                            " :This server was created Tue Sep 10 2025 at 12:00:00 UTC\r\n");
+
+    // 004 RPL_MYINFO
+    sendToClient(client, ":ircserv 004 " + nick +
+                            " ircserv 1.0.0 \r\n");
+
+    // 005 RPL_ISUPPORT (puedes añadir más líneas si quieres)
+    sendToClient(client, ":ircserv 005 " + nick +
+                            " CHANTYPES=# PREFIX=(ov)@+ NICKLEN=30 MAXCHANNELS=20 :are supported by this server\r\n");
+}
+*/
+
+
+//RESPUESTA SOBRE LA LISTA DE CAPACIDADES QUE SOPORTA EL SERVER
 void Server::handleCap(Client *cli) //, const std::vector<std::string> &tokens)
 {
-	// RespondeMOS con lista vacía de capabilities (:)
+	// Respondemos con lista vacia de capabilities (:)
 	std::ostringstream reply;
 	std::string nick = cli->getNickname().empty() ? "nickname" : cli->getNickname();
 	reply << ":Server CAP "
@@ -647,13 +628,6 @@ void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
 //	tryRegister(*cli);
 }
 
-
-//OJO solo para pruebas de joan
-// void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
-// {
-//     (void)cli;
-//     std::cout << tokens[0] << " command received" << std::endl;
-// }
 
 void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
 {
@@ -931,60 +905,6 @@ Client* Server::getClientByNick(const std::string& nick)
     }
     return NULL; // no encontrado
 }
-// ELIMINADA
-// void Server::tryRegister(Client& client)
-// {
-//     if (client.isAuthenticated())
-//         return ;
-
-/* ELIMINADA
-void Server::tryRegister(Client& client)
-{
-
-    if (client.isAuthenticated())
-        return ;
-
-    if (client.hasPassAccepted() && !client.getNickname().empty() && !client.getUsername().empty())
-    {
-        client.setAuthenticated(true);
-        sendToClient(client, ":ircserv 001 " + client.getNickname() + " :Welcome to the IRC server, " 
-                    + client.getNickname() + "!" + client.getUsername() + "@localhost\r\n");
-        std::cout << GRE << "Client <" << client.getFd() << "> authenticated as " 
-                  << client.getNickname() << WHI << std::endl;
-    }
-    else
-        sendToClient(client, "451 :You have not registered\r\n");
-}*/
-/* ELIMINADA
-void Server::sendToClient(Client& client, const std::string& message)
-{
-    int fd = client.getFd();
-    const char* buffer = message.c_str();
-    size_t totalSent = 0;
-    size_t length = message.size();
-
-    while (totalSent < length)
-    {
-        ssize_t sent = send(fd, buffer + totalSent, length - totalSent, 0);
-        if (sent <= 0)
-        {
-            if (errno == EWOULDBLOCK || errno == EAGAIN)
-            {
-                // El socket no está listo → esperar y reintentar
-                break ;
-            }
-            else
-            {
-                std::cerr << RED << "Error sending to client <" << fd << ">" << WHI << std::endl;
-                //removeClient(fd); // cerrar la conexión
-                clearClient(fd);
-                close(fd);
-                return ;
-            }
-        }
-        totalSent += sent;
-    }
-} */
 
 
 Channel* Server::getOrCreateChannel(const std::string& name)
@@ -998,18 +918,51 @@ Channel* Server::getOrCreateChannel(const std::string& name)
     return &_channels.back();
 }
 
-void Server::handleTopic(Client* cli, const std::vector<std::string>& tokens)
+Channel* Server::findChannel(const std::string& channelName)
 {
+    Channel* chan = NULL;
+
+    for (size_t i = 0; i < _channels.size(); ++i)
+    {
+        if (_channels[i].getName() == channelName)
+        {
+            chan = &_channels[i];
+            break ;
+        }
+    }
+    return (chan);
+}
+
+void Server::handleTopic(Client *cli, const std::vector<std::string>& tokens)
+{
+    if (!cli)
+        return ;
+    
+    std::string target;
+    if (cli->getNickname().empty()) {
+        target = "*";
+	}
+    else {
+        target = cli->getNickname();
+	}
+
+//    if (!cli->isAuthenticated())
+	if (cli->getStatus() != AUTHENTICATED)
+    {
+        sendToClient(*cli, ":ircserv 451 " + target + " :You have not registered\r\n");
+        return ;
+    }
+    
     if (tokens.size() < 2)
     {
-        sendToClient(*cli, ":localhost 461 " + cli->getNickname() + " TOPIC :Not enough parameters\r\n");
+        sendToClient(*cli, ":ircserv 461 " + cli->getNickname() + " TOPIC :Not enough parameters\r\n");
         return ;
     }
 
     std::string channelName = tokens[1];
 
     // Buscar canal en vector
-    Channel* chan = 0;//NULL;
+    Channel* chan = NULL;
     for (size_t i = 0; i < _channels.size(); ++i)
     {
         if (_channels[i].getName() == channelName)
@@ -1021,35 +974,29 @@ void Server::handleTopic(Client* cli, const std::vector<std::string>& tokens)
 
     if (!chan)
     {
-        sendToClient(*cli, ":localhost 403 " + cli->getNickname() + " " + channelName + " :No such channel\r\n");
+        sendToClient(*cli, ":ircserv 403 " + cli->getNickname() + " " + channelName + " :No such channel\r\n");
         return ;
     }
 
     if (!chan->isMember(cli->getFd()))
     {
-        sendToClient(*cli, ":localhost 442 " + cli->getNickname() + " " + channelName + " :You're not on that channel\r\n");
+        sendToClient(*cli, ":ircserv 442 " + cli->getNickname() + " " + channelName + " :You're not on that channel\r\n");
         return ;
     }
 
-    // Solo consultar topic
+    // Caso 1: Solo consultar topic
     if (tokens.size() == 2)
     {
         if (chan->hasTopic())
-        {
-            sendToClient(*cli, ":localhost 332 " + cli->getNickname() + " " + channelName + " :" + chan->getTopic() + "\r\n");
-        }
+            sendToClient(*cli, ":ircserv 332 " + cli->getNickname() + " " + channelName + " :" + chan->getTopic() + "\r\n");
         else
-        {
-            sendToClient(*cli, ":localhost 331 " + cli->getNickname() + " " + channelName + " :No topic is set\r\n");
-        }
+            sendToClient(*cli, ":ircserv 331 " + cli->getNickname() + " " + channelName + " :No topic is set\r\n");
         return ;
     }
-
-    // Cambiar topic
-    // Si modo +t está activo, solo operadores pueden
+    // Caso 2: Cambiar topic (Si modo +t está activo, solo operadores pueden)
     if (chan->isModeT() && !chan->isOperator(cli->getFd()))
     {
-        sendToClient(*cli, ":localhost 482 " + cli->getNickname() + " " + channelName + " :You're not channel operator\r\n");
+        sendToClient(*cli, ":ircserv 482 " + cli->getNickname() + " " + channelName + " :You're not channel operator\r\n");
         return ;
     }
 
@@ -1070,30 +1017,45 @@ void Server::handleTopic(Client* cli, const std::vector<std::string>& tokens)
     {
         Client* other = getClient(*mit);
         if (other)
-        {
             sendToClient(*other, ":" + cli->getNickname() + " TOPIC " + channelName + " :" + topic + "\r\n");
-        }
     }
 }
 
 void Server::handleMode(Client* cli, const std::vector<std::string>& tokens)
 {
+    if (!cli)
+        return ;
+    
+    std::string target;
+    if (cli->getNickname().empty()) {
+        target = "*";
+	}
+    else {
+        target = cli->getNickname();
+	}
+
+    //if (!cli->isAuthenticated())
+	if (cli->getStatus() != AUTHENTICATED)
+    {
+        sendToClient(*cli, ":ircserv 451 " + target + " :You have not registered\r\n");
+        return ;
+    }
+    
     if (tokens.size() < 2)
     {
-        sendToClient(*cli, "461 MODE :Not enough parameters\r\n");
+        sendToClient(*cli, ":ircserv 461 " + target + " MODE :Not enough parameters\r\n");
         return ;
     }
 
-    // Comprobar que channel comienza por '#'
-    std::string target = tokens[1];
-    if (target[0] != '#')
+    target = tokens[1];
+    if (target[0] != '#')// Comprobar que channel comienza por '#'
     {
-        sendToClient(*cli, "403 " + target + " :No such channel\r\n");
+        sendToClient(*cli, ":ircserv 403 " + target + " :No such channel\r\n");
         return ;
     }
 
     // Buscar canal en el vector
-    Channel* chan = 0;//NULL
+    Channel* chan = NULL;
     for (size_t i = 0; i < _channels.size(); ++i)
     {
         if (_channels[i].getName() == target)
@@ -1105,72 +1067,50 @@ void Server::handleMode(Client* cli, const std::vector<std::string>& tokens)
 
     if (!chan)
     {
-        sendToClient(*cli, "403 " + target + " :No such channel\r\n");
+        sendToClient(*cli, ":ircserv 403 " + target + " :No such channel\r\n");
         return ;
     }
-	
+
+// Caso 1: consulta modos
+    if (tokens.size() == 2) {
+        showChannelModes(cli, chan, target);
+        return;
+    }
+
+    // Caso 2: modificación de modos
+    if (!checkOperator(cli, chan, target))
+        return;
+
+    applyChannelModes(cli, chan, tokens, target);
+
+/*  Caso 1: Si no hay flags, mostrar modos actuales
+    if (tokens.size() == 2)
     {
-        std::string modes;
-        //if (chan->isModeT()) modes += "t";
-        if (modes.empty()) modes = "";
-        //std::string modes = "";
+        std::string modes = "";
         if (chan->isModeT()) modes += "t";
         if (chan->isModeI()) modes += "i";
         if (chan->isModeK()) modes += "k";
         if (chan->isModeL()) modes += "l";
 
         if (!modes.empty())
-            sendToClient(*cli, ":" + cli->getNickname() + " MODE " + target + " +" + modes + "\r\n");
+            sendToClient(*cli, ":ircserv 324 " + cli->getNickname() + " " + target + " +" + modes + "\r\n");
         else
-            sendToClient(*cli, ":" + cli->getNickname() + " MODE " + target + " has no modes" + modes + "\r\n");
+            sendToClient(*cli, ":ircserv 324 " + cli->getNickname() + " " + target + "\r\n");
         return ;
     }
 
-    // Validar que sea operador
+    // Caso 2: Validar que sea operador para modificar los modes
     if (!chan->isOperator(cli->getFd()))
     {
-        sendToClient(*cli, "482 " + target + " :You're not channel operator\r\n");
+        sendToClient(*cli, ":ircserv 482 " + cli->getNickname() + " " + target + " :You're not channel operator\r\n");
         return ;
     }
-
-    // Procesar flags (+t / -t por ahora)
-/*  std::string modes = tokens[2];
-    for (size_t i = 0; i < modes.size(); ++i)
-    {
-        if (modes[i] == '+')
-            continue ;
-        if (modes[i] == '-')
-            continue ;
-        if (modes[i] == 't')
-        {
-            if (tokens[2][0] == '+')
-                chan->setModeT(true);
-            else if (tokens[2][0] == '-')
-                chan->setModeT(false);
-
-            // Avisar a todos en el canal
-            const std::set<int>& members = chan->getClients();
-            for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
-            {
-                Client* other = getClient(*it);
-                if (other)
-                {
-                    sendToClient(*other, ":" + cli->getNickname() + " MODE " + target + " " + tokens[2] + "\r\n");
-                }
-            }
-        }
-        else
-        {
-            sendToClient(*cli, "472 " + std::string(1, modes[i]) + " :is unknown mode char\r\n");
-        }
-    }*/
-
     // Procesar flags
     std::string modeStr = tokens[2];
     bool add = true;
     size_t argIndex = 3; // índice para argumentos opcionales (key o limit)
 
-    for (size_t i = 0; i < modeStr.size(); ++i)///////////FALTA CHECKEAR MODE == +-tikl
+    for (size_t i = 0; i < modeStr.size(); ++i)
     {
         char m = modeStr[i];
         if (m == '+') { add = true; continue; }
@@ -1222,7 +1162,7 @@ void Server::handleMode(Client* cli, const std::vector<std::string>& tokens)
         }
         else
         {
-            sendToClient(*cli, "472 " + std::string(1, m) + " :is unknown mode char\r\n");
+            sendToClient(*cli, ":ircserv 472 " + cli->getNickname() + std::string(1, m) + " :is unknown mode char\r\n");
         }
     }
 
@@ -1235,5 +1175,317 @@ void Server::handleMode(Client* cli, const std::vector<std::string>& tokens)
         {
             sendToClient(*other, ":" + cli->getNickname() + " MODE " + target + " " + modeStr + "\r\n");
         }
+    }*/
+}
+
+// --- Funciones auxiliares ---
+
+bool Server::checkOperator(Client *cli, Channel *chan, const std::string& target)
+{
+    if (!chan->isOperator(cli->getFd()))
+    {
+        sendToClient(*cli, ":ircserv 482 " + cli->getNickname() + " " + target + " :You're not channel operator\r\n");
+        return false;
     }
+    return true;
+}
+
+void Server::showChannelModes(Client *cli, Channel *chan, const std::string& target)
+{
+    std::string modes = "";
+    if (chan->isModeT()) modes += "t";
+    if (chan->isModeI()) modes += "i";
+    if (chan->isModeK()) modes += "k";
+    if (chan->isModeL()) modes += "l";
+
+    if (!modes.empty())
+        sendToClient(*cli, ":ircserv 324 " + cli->getNickname() + " " + target + " +" + modes + "\r\n");
+    else
+        sendToClient(*cli, ":ircserv 324 " + cli->getNickname() + " " + target + "\r\n");
+}
+
+void Server::broadcastModeChange(Channel* chan, Client* cli,
+                                const std::string& target,
+                                const std::string& appliedModes,
+                                const std::vector<std::string>& appliedArgs) 
+{
+    if (appliedModes.empty())
+        return ;
+
+    std::string notice = ":" + cli->getNickname() + " MODE " + target + " " + appliedModes;
+    for (size_t i = 0; i < appliedArgs.size(); ++i)
+        notice += " " + appliedArgs[i];
+    notice += "\r\n";
+
+    const std::set<int>& members = chan->getClients();
+    for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
+    {
+        Client* other = getClient(*it);
+        if (other)
+            sendToClient(*other, notice);
+    }
+}
+
+void Server::applyChannelModes(Client *cli, Channel *chan,
+                               const std::vector<std::string>& tokens,
+                               const std::string& target) 
+{
+    std::string modeStr = tokens[2];
+    bool add = true;
+    size_t argIndex = 3;
+
+    std::string appliedModes = "";
+    std::vector<std::string> appliedArgs;
+
+    for (size_t i = 0; i < modeStr.size(); ++i)
+    {
+        char m = modeStr[i];
+        if (m == '+') { add = true; appliedModes += '+'; continue; }
+        if (m == '-') { add = false; appliedModes += '-'; continue; }
+
+        if (m == 't')
+        {
+            chan->setModeT(add);
+            appliedModes += 't';
+        }
+        else if (m == 'i')
+        {
+            chan->setModeI(add);
+            appliedModes += 'i';
+        }
+        else if (m == 'k')
+        {
+            if (add)
+            {
+                if (argIndex >= tokens.size())
+                {
+                    sendToClient(*cli, ":ircserv 461 " + cli->getNickname() + " MODE :Not enough parameters for +k\r\n");
+                    continue;
+                }
+                chan->setKey(tokens[argIndex]);
+                chan->setModeK(true);
+                appliedModes += 'k';
+                appliedArgs.push_back(tokens[argIndex++]);
+            }
+            else
+            {
+                chan->setModeK(false);
+                chan->setKey(""); // limpiar
+                appliedModes += 'k';
+            }
+        }
+        else if (m == 'l')
+        {
+            if (add)
+            {
+                if (argIndex >= tokens.size())
+                {
+                    sendToClient(*cli, ":ircserv 461 " + cli->getNickname() + " MODE :Not enough parameters for +l\r\n");
+                    continue;
+                }
+                char* endptr = NULL;
+                long limit = strtol(tokens[argIndex].c_str(), &endptr, 10);
+                if (*endptr != '\0' || limit <= 0)
+                {
+                    sendToClient(*cli, ":ircserv 461 " + cli->getNickname() + " MODE :Invalid user limit\r\n");
+                    argIndex++;
+                    continue;
+                }
+                chan->setUserLimit((int)limit);
+                chan->setModeL(true);
+                appliedModes += 'l';
+                appliedArgs.push_back(tokens[argIndex++]);
+            }
+            else
+            {
+                chan->setModeL(false);
+                chan->setUserLimit(0);
+                appliedModes += 'l';
+            }
+        }
+        else if (m == 'o')
+        {
+            if (argIndex >= tokens.size())
+            {
+                sendToClient(*cli, ":ircserv 461 " + cli->getNickname() + " MODE :Not enough parameters for +o/-o\r\n");
+                continue;
+            }
+            std::string nick = tokens[argIndex++];
+            Client* targetCli = getClientByNick(nick);
+            if (!targetCli || !chan->isMember(targetCli->getFd()))
+            {
+                sendToClient(*cli, ":ircserv 441 " + nick + " " + target + " :They aren't on that channel\r\n");
+                continue;
+            }
+
+            if (add)
+                chan->addOperator(targetCli->getFd());
+            else
+                chan->removeOperator(targetCli->getFd());
+
+            appliedModes += 'o';
+            appliedArgs.push_back(nick);
+        }
+        else
+        {
+            sendToClient(*cli, ":ircserv 472 " + cli->getNickname() + " " 
+                               + std::string(1, m) + " :is unknown mode char\r\n");
+        }
+    }
+
+    broadcastModeChange(chan, cli, target, appliedModes, appliedArgs);
+}
+
+void Server::handleKick(Client *cli, const std::vector<std::string>& tokens)
+{
+    if (!cli)
+        return ;
+    
+    std::string target;
+    if (cli->getNickname().empty()) {
+        target = "*";
+	}
+    else {
+        target = cli->getNickname();
+	}
+
+    //if (!cli->isAuthenticated())
+	if (cli->getStatus() != AUTHENTICATED)
+    {
+        sendToClient(*cli, ":ircserv 451 " + target + " :You have not registered\r\n");
+        return ;
+    }
+    
+    if (tokens.size() < 3)
+    {
+        sendToClient(*cli, ":ircserv 461 " + cli->getNickname() + " KICK :Not enough parameters\r\n");
+        return ;
+    }
+
+    std::string channelName = tokens[1];
+    std::string targetNick  = tokens[2];
+
+    Channel* chan = findChannel(channelName);
+    
+    if (!chan)
+    {
+        sendToClient(*cli, ":ircserv 403 " + channelName + " :No such channel\r\n");
+        return ;
+    }
+
+    if (!chan->isOperator(cli->getFd()))
+    {
+        sendToClient(*cli, ":ircserv 482 " + channelName + " :You're not channel operator\r\n");
+        return ;
+    }
+
+    Client* targetCli = getClientByNick(targetNick);
+    if (!targetCli || !chan->isMember(targetCli->getFd()))
+    {
+        sendToClient(*cli, ":ircserv 441 " + targetNick + " " + channelName + " :They aren't on that channel\r\n");
+        return ;
+    }
+
+    // Mensaje de razón (opcional, después del nick)
+    //std::string reason = (tokens.size() > 3) ? tokens[3] : cli->getNickname();
+    std::string reason;
+    if (tokens.size() > 3)
+        reason = tokens[3];
+    else
+        reason = cli->getNickname();
+
+    // Avisar a todos en el canal
+    const std::set<int>& members = chan->getClients();
+    for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
+    {
+        Client* other = getClient(*it);
+        if (other)
+        {
+            sendToClient(*other, ":" + cli->getNickname() + " KICK " + channelName +
+                                  " " + targetNick + " :" + reason + "\r\n");
+        }
+    }
+
+    // Expulsar al cliente del canal
+    chan->removeClient(targetCli->getFd());
+
+	//Si el canal ha quedado vacio, porque el unico
+	// miembro era el operator y se expulso a si
+	//mismo con el KICK, debemos eliminar el canal.
+	if (chan->getClients().empty()) {
+    	removeEmptyChannel(chan); // es un puntero al canal
+	}
+}
+
+void Server::removeEmptyChannel(Channel* chan) { 
+	if (!chan)
+		return;
+	for (std::vector<Channel>::iterator it = _channels.begin(); it != _channels.end(); ++it)
+	{
+		if (&(*it) == chan) {
+			_channels.erase(it);
+			break;
+		}
+	}
+}
+
+
+
+void Server::handleInvite(Client* cli, const std::vector<std::string>& tokens)
+{
+    if (tokens.size() < 3)
+    {
+        sendToClient(*cli, ":ircserv 461 " + cli->getNickname() + " INVITE :Not enough parameters\r\n");
+        return;
+    }
+
+    std::string targetNick  = tokens[1];
+    std::string channelName = tokens[2];
+
+    Channel* chan = findChannel(channelName);
+    /*Channel *chan = NULL;
+    for (size_t i = 0; i < _channels.size(); i++)
+    {
+        if (_channels[i].getName() == channelName)
+        {
+            chan = &_channels[i];
+            std::cout << "Channel "<< _channels[i].getName() <<" found!" << std::endl;
+            break ;
+        }
+    }*/
+    if (!chan)
+    {
+        sendToClient(*cli, ":ircserv 403 " + channelName + " :No such channel\r\n");
+        return;
+    }
+
+    Client* targetCli = getClientByNick(targetNick);
+    if (!targetCli)
+    {
+        sendToClient(*cli, ":ircserv 401 " + targetNick + " :No such nick\r\n");
+        return;
+    }
+
+    if (chan->isMember(targetCli->getFd()))
+    {
+        sendToClient(*cli, ":ircserv 443 " + targetNick + " " + channelName + " :is already on channel\r\n");
+        return;
+    }
+
+    if (chan->isModeI() && !chan->isOperator(cli->getFd()))
+    {
+        sendToClient(*cli, ":ircserv 482 " + channelName + " :You're not channel operator\r\n");
+        return;
+    }
+
+    chan->inviteClient(targetCli->getFd());
+
+    // Avisar al invitado
+    sendToClient(*targetCli, ":" + cli->getNickname() + " INVITE " + targetNick + " :" + channelName + "\r\n");
+
+    // Confirmar al emisor
+    sendToClient(*cli, ":ircserv 341 " + cli->getNickname() + " " + targetNick + " " + channelName + "\r\n");
+
+    // Aquí podrías añadir lógica para marcar al cliente como "invitado" al canal
+    // por ejemplo, un set<int> _invited en Channel para comprobarlo en handleJoin().
 }

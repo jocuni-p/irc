@@ -52,7 +52,7 @@ run: $(NAME)
 
 # Ejecutar el servidor con parametros y Valgrind
 #val: $(NAME)
-#	@vgr ./$(NAME) 6667 123456
+#	vgr ./$(NAME) 6667 123456
 
 
 # Prevent conflicts with files named like our targets

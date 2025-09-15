@@ -28,54 +28,63 @@
 class Server
 {
 private:
-    int                             _port;
-    int                             _serverFd;
-    std::string                     _password;
-    static bool                     _signalFlag;
-    std::vector<Client>             _clients;
-    std::vector<struct pollfd>      _fds;
-    std::vector<Channel>            _channels;
+    int                      	_port;
+    int                         _serverFd;
+    std::string                 _password;
+    static bool                 _signalFlag;
+    std::vector<Client>         _clients;
+    std::vector<struct pollfd>	_fds;
+    std::vector<Channel>        _channels;
 
-    Channel* getOrCreateChannel(const std::string& name);
-
+	
     // Helpers / parser
-    Client* getClient(int fd);
-    Client* getClientByNick(const std::string& nick);
-	Channel *getChannelByName(const std::string &name);
-	void parseCommand(Client *cli, const std::string &cmd);
-	void handshake(Client *cli, const std::string &cmd);
-//    void tryRegister(Client& client);
+    Client* 					getClient(int fd);
+    Client* 					getClientByNick(const std::string& nick);
+	Channel*					getChannelByName(const std::string &name);
+    Channel* 					getOrCreateChannel(const std::string& name);
+    Channel* 					findChannel(const std::string& channelName);
+	void 						parseCommand(Client *cli, const std::string &cmd);
+	void 						handshake(Client *cli, const std::string &cmd);
 
     // Handlers de comandos
-	void handleCap(Client *cli); //, const std::vector<std::string> &tokens);
-    void handlePass(Client* cli, const std::vector<std::string>& tokens);
-    void handleNick(Client* cli, const std::vector<std::string>& tokens);
-    void handleUser(Client* cli, const std::vector<std::string>& tokens);
-    void handleJoin(Client* cli, const std::vector<std::string>& tokens);
-	void handleWho(Client *cli, const std::vector<std::string> &tokens);
-	void handlePrivmsg(Client *cli, const std::vector<std::string> &tokens);
-	void handleTopic(Client* cli, const std::vector<std::string>& tokens);
-    void handleMode(Client* cli, const std::vector<std::string>& tokens);
+	void 						handleCap(Client *cli); //, const std::vector<std::string> &tokens);
+    void 						handlePass(Client* cli, const std::vector<std::string>& tokens);
+    void 						handleNick(Client* cli, const std::vector<std::string>& tokens);
+    void 						handleUser(Client* cli, const std::vector<std::string>& tokens);
+    void 						handleJoin(Client* cli, const std::vector<std::string>& tokens);
+	void 						handleWho(Client *cli, const std::vector<std::string> &tokens);
+	void 						handlePrivmsg(Client *cli, const std::vector<std::string> &tokens);
+	void 						handleTopic(Client* cli, const std::vector<std::string>& tokens);
+    void 						handleMode(Client* cli, const std::vector<std::string>& tokens);
+    void 						handleKick(Client* cli, const std::vector<std::string>& tokens);
+    void 						handleInvite(Client* cli, const std::vector<std::string>& tokens);
 
-    void sendToClient(Client& client, const std::string& message);
+    void 						sendToClient(Client& client, const std::string& message);
+    void 						sendWelcomeMessages(Client& client);
+    
+    bool 						checkOperator(Client *cli, Channel *chan, const std::string& target);
+    void 						showChannelModes(Client *cli, Channel *chan, const std::string& target);
+    void 						broadcastModeChange(Channel *chan, Client *cli,
+									const std::string& target,
+									const std::string& appliedModes,
+									const std::vector<std::string>& appliedArgs);
+	void 						applyChannelModes(Client* cli, Channel* chan,
+									const std::vector<std::string>& tokens,
+									const std::string& target) ;
 
 public:
     Server();
-    void serverInit(int port, std::string& pwd);
-    void createSocket();
-    void acceptNewClient();
-    void receiveNewData(int fd);
-    void closeFds();
-    void clearClient(int fd);
-  //void sendToClient(Client& client, const std::string& message);
+    void 						serverInit(int port, std::string& pwd);
+    void 						createSocket();
+    void 						acceptNewClient();
+    void 						receiveNewData(int fd);
+    void 						closeFds();
+    void 						clearClient(int fd);
+    void 						removeEmptyChannel(Channel* chan);
 
   // Utilities
-    static void signalHandler(int signum);
-//	static bool isValidPasswordArg(const std::string &pass);
-//	static bool isValidPortArg(const int &port);
-	static std::string joinFrom(const std::vector<std::string> &v, size_t start, const std::string &sep = " ");
-
-	
+    static void 				signalHandler(int signum);
+	static std::string 			joinFrom(const std::vector<std::string> &v, size_t start, const std::string &sep = " ");
 };
 
 #endif

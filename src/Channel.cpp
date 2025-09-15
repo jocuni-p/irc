@@ -31,7 +31,7 @@ bool Channel::isModeK() const { return _modeK; }
 
 void Channel::setKey(const std::string& key) {
     _key = key;
-    _modeK = true;
+    //_modeK = true;
 }
 
 const std::string& Channel::getKey() const {
@@ -44,7 +44,7 @@ bool Channel::isModeL() const { return _modeL; }
 
 void Channel::setUserLimit(int limit) {
     _userLimit = limit;
-    _modeL = true;
+    //_modeL = true;
 }
 
 int Channel::getUserLimit() const {
@@ -54,11 +54,10 @@ int Channel::getUserLimit() const {
 bool Channel::addClient(int fd, bool isOperator)
 {
     if (_modeL && (int)_clients.size() >= _userLimit)
-    {
         return false; // canal lleno
-    }
 
     _clients.insert(fd);
+
     if (isOperator)
         _operators.insert(fd);
     
@@ -79,6 +78,32 @@ bool Channel::isMember(int fd) const
 bool Channel::isOperator(int fd) const
 {
     return _operators.find(fd) != _operators.end();
+}
+
+void Channel::addOperator(int fd)
+{
+    if (_clients.count(fd))
+        _operators.insert(fd);
+}
+
+void Channel::removeOperator(int fd)
+{
+    _operators.erase(fd);
+}
+
+void Channel::inviteClient(int fd)
+{
+    _invited.insert(fd);
+}
+
+bool Channel::isInvited(int fd) const
+{
+    return _invited.count(fd) > 0;
+}
+
+void Channel::removeInvite(int fd)
+{
+    _invited.erase(fd);
 }
 
 const std::set<int>& Channel::getClients() const
