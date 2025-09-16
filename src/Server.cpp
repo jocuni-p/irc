@@ -350,23 +350,26 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	else if (command == "WHO") { //Refresca datos, OJO podemos configurar HexChat para que no lo lance
 		handleWho(cli, tokens);
 	}
-	else if (command == "KICK") {
-		handleKick(cli, tokens);
-	}
 	else if (command == "PRIVMSG") {
 		handlePrivmsg(cli, tokens);
+	}
+	else if (command == "MODE") {
+		handleMode(cli, tokens);
+	}
+	else if (command == "KICK") {
+		handleKick(cli, tokens);
 	}
 	else if (command == "TOPIC") {
 		handleTopic(cli, tokens);
 	}
-	else if (command == "MODE") {
-		handleMode(cli, tokens);
+	else if (command == "INVITE") {
+		handleInvite(cli, tokens);
 	}
 	else if (command == "QUIT") { //gestionar una eliminacion y borrado limpios del cliente
 	 	clearClient(cli->getFd()); // cierra socket,lo marca para eliminarlo de _fds, _clients, _channels y lo informa en consola 
 	}
 	else {
-		std::cout << "Unknown command: " << cmd << std::endl;
+		std::cout << "Ignored command by ircserv: " << cmd << std::endl;
 		//Aqui llegaran los comandos que maneja HexChat y nosotros no hemos contemplado por que subject no lo requiere
 		// quiza lo mejor sea no hacer nada aqui ?????
 	}
@@ -797,9 +800,94 @@ void Server::handleWho(Client *cli, const std::vector<std::string> &tokens)
 }
 
 
+void Server::handlePrivmsg(Client *cli, const std::vector<std::string>& tokens)
+{
+    if (!cli)
+        return;
+
+    std::string sender;
+    if (cli->getNickname().empty())
+        sender = "*";
+    else
+        sender = cli->getNickname();
+
+    // 1. Validar parámetros
+    if (tokens.size() < 3)
+    {
+        sendToClient(*cli, ":ircserv 461 " + cli->getNickname() + " PRIVMSG :Not enough parameters\r\n");
+        return;
+    }
+
+    // 2. Construir mensaje completo
+    std::string message = tokens[2];
+    if (tokens[2][0] == ':')
+        message = tokens[2].substr(1);
+    for (size_t i = 3; i < tokens.size(); ++i)
+        message += " " + tokens[i];
+
+    // 3. Separar lista de destinatarios por comas
+    std::vector<std::string> targets = Utils::split(tokens[1], ',');
+    for (size_t t = 0; t < targets.size(); ++t)
+    {
+        std::string dest = targets[t];
+        if (dest.empty())
+            continue;
+
+        // 3a. Destino es canal
+        if (dest[0] == '#')
+        {
+            Channel *chan = NULL;
+            for (size_t i = 0; i < _channels.size(); ++i)
+            {
+                if (_channels[i].getName() == dest)
+                {
+                    chan = &_channels[i];
+                    break;
+                }
+            }
+
+            if (!chan)
+            {
+                sendToClient(*cli, ":ircserv 403 " + cli->getNickname() + " " + dest + " :No such channel\r\n");
+                continue;
+            }
+
+            if (!chan->isMember(cli->getFd()))
+            {
+                sendToClient(*cli, ":ircserv 442 " + cli->getNickname() + " " + dest + " :You're not on that channel\r\n");
+                continue;
+            }
+
+            // reenviar a todos los clientes del canal excepto el emisor
+            const std::set<int>& members = chan->getClients();
+            for (std::set<int>::const_iterator it = members.begin(); it != members.end(); ++it)
+            {
+                if (*it != cli->getFd())
+                {
+                    Client* other = getClient(*it);
+                    if (other)
+                        sendToClient(*other, ":" + cli->getNickname() + "!" + cli->getUsername() +
+                                               "@localhost PRIVMSG " + dest + " :" + message + "\r\n");
+                }
+            }
+        }
+        // 3b. Destino es usuario
+        else
+        {
+            Client* targetClient = getClientByNick(dest);
+            if (!targetClient)
+            {
+                sendToClient(*cli, ":ircserv 401 " + cli->getNickname() + " " + dest + " :No such nick\r\n");
+                continue;
+            }
+            sendToClient(*targetClient, ":" + cli->getNickname() + "!" + cli->getUsername() +
+                                       "@localhost PRIVMSG " + dest + " :" + message + "\r\n");
+        }
+    }
+}
 
 
-
+/*
 void Server::handlePrivmsg(Client *cli, const std::vector<std::string>& tokens)
 {
     if (!cli)
@@ -887,6 +975,7 @@ void Server::handlePrivmsg(Client *cli, const std::vector<std::string>& tokens)
         sendToClient(*targetClient, ":" + cli->getNickname() + "!" + cli->getUsername() + "@localhost" + " PRIVMSG " + target + " :" + message + "\r\n");
     }
 }
+*/
 
 // void Server::handleQuit(Client* cli) {
 // 	clearClient(pasarle el fd);

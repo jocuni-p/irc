@@ -2,7 +2,9 @@ Notas jocuni-p 15/09/25 15:35
 ================================
 A CORREGIR:
 
--Al hacer un KICK desde operator a un miembro del canal, lo expulsa bien y la lista en el server se actualiza en consecuencia, pero en el panel de users del HexChat NO se refleja que ha sido expulsado.
+-Al hacer un KICK desde operator a un miembro del canal, 
+lo expulsa bien y la lista en el server se actualiza en consecuencia, 
+pero en el panel de users del HexChat NO se refleja que ha sido expulsado.
 
 -Aligerar Server.cpp de funciones.
 
