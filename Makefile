@@ -1,7 +1,7 @@
 NAME = ircserv
 
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -g
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -MMD -MP
 
 #valgrind --leak-check=full ./ircserv 6667 123456
 
@@ -22,6 +22,9 @@ SRCS = $(SRC_DIR)/main.cpp \
 
 # Object files
 OBJS = $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
+
+DEPS = $(OBJS:.o=.d)
+
 
 # Default target
 all: $(NAME)
@@ -49,6 +52,8 @@ re: fclean all
 # Ejecutar el servidor con parámetros de prueba
 run: $(NAME)
 	@./$(NAME) 6667 123456
+
+-include $(DEPS)
 
 
 # Prevent conflicts with files named like our targets
