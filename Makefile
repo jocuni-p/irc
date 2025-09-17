@@ -1,7 +1,7 @@
 NAME = ircserv
 
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -g #-fsanitize=address -fno-omit-frame-pointer
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -g
 
 #valgrind --leak-check=full ./ircserv 6667 123456
 
@@ -50,10 +50,6 @@ re: fclean all
 run: $(NAME)
 	@./$(NAME) 6667 123456
 
-# Ejecutar el servidor con parametros y Valgrind
-#val: $(NAME)
-#	vgr ./$(NAME) 6667 123456
-
 
 # Prevent conflicts with files named like our targets
-.PHONY: all clean fclean re run val
+.PHONY: all clean fclean re run
