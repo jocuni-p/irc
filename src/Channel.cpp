@@ -31,7 +31,6 @@ bool Channel::isModeK() const { return _modeK; }
 
 void Channel::setKey(const std::string& key) {
     _key = key;
-    //_modeK = true;
 }
 
 const std::string& Channel::getKey() const {
@@ -44,7 +43,6 @@ bool Channel::isModeL() const { return _modeL; }
 
 void Channel::setUserLimit(int limit) {
     _userLimit = limit;
-    //_modeL = true;
 }
 
 int Channel::getUserLimit() const {
@@ -98,7 +96,7 @@ void Channel::inviteClient(int fd)
 
 bool Channel::isInvited(int fd) const
 {
-    return _invited.count(fd) > 0;
+	return _invited.find(fd) != _invited.end();
 }
 
 void Channel::removeInvite(int fd)

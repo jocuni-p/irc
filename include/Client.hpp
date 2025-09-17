@@ -24,13 +24,10 @@ private:
     std::string 	_realname;
     std::string     _buffer;
 	LoginStatus 	_status;
-//	bool 			_passAccepted;
-//	bool            _authenticated;
 	bool 			_toBeRemoved;
 
 public:
     Client();
-   // Client(int fd);
     ~Client();
 
     // --- Getters ---
@@ -40,7 +37,6 @@ public:
     std::string     getUsername() const;
     std::string     getRealname() const;
 	LoginStatus 	getStatus() const;
-//    bool            isAuthenticated() const;
 	std::string 	&getBuffer();
 
 	// --- Setters ---
@@ -49,12 +45,8 @@ public:
     void            setNickname(const std::string& nick);
     void            setUsername(const std::string& user);
     void            setRealname(const std::string& real);
-//    void            setAuthenticated(bool status);
 	void 			setStatus(LoginStatus s);
 
-	// PASS
-//    bool            hasPassAccepted() const;
-//    void            setPassAccepted(bool status);
 	void 			markForRemoval();
 	bool 			isMarkedForRemoval() const;
 
