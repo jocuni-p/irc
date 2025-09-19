@@ -1,5 +1,6 @@
 #include "Client.hpp"
 
+
 Client::Client() : _fd(-1), _status(NOT_AUTHENTICATED), _toBeRemoved(false) {}
 Client::~Client() {}
 

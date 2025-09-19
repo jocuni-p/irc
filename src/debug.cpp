@@ -2,7 +2,7 @@
 #include "debug.hpp"
 
 
-
+//Muestra los canales que hay y que clientes hay en cada uno
 void printChannels(const std::vector<Channel>& _channels)
 {
     std::cout << "---- Lista de canales ----" << std::endl;
@@ -31,6 +31,7 @@ void printChannels(const std::vector<Channel>& _channels)
     std::cout << "--------------------------" << std::endl;
 }
 
+// Muestra los clientes+fd autenticados y los conectados sin autenticar 
 void printClients(const std::vector<Client>& _clients) {
     std::cout << "---- Lista de clientes ----" << std::endl;
     for (size_t i = 0; i < _clients.size(); ++i) {

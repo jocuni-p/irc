@@ -3,14 +3,14 @@
 
 bool Server::_signalFlag = false;
 
+//We use this as a flag to stop the process in a clean way
 void Server::signalHandler(int signum)
 {
     (void)signum;
-//    std::cout << std::endl << "Signal Received!" << std::endl;
     Server::_signalFlag = true;
 }
 
-// CONSTRUCTOR POR DEFECTO
+// Constructor
 Server::Server() : _port(0), _serverFd(-1) {}
 
 
@@ -64,9 +64,10 @@ void Server::serverInit(int port, std::string& pwd)
 	std::cout << GREEN << "\n** Server IRC created **" << RESET << std::endl;
 	std::cout << "Listening on port <" << this->_port << ">\n" << std::endl;
 
-	//NOTA: no borrar un cliente mientras tu bucle poll() todavía pueda
-	// acceder a él, sino marcarlo como pendiente de cierre y eliminarlo 
-	//de forma segura después.
+	//NOTA: para evitar malfuncionamiento no borraremos ningun cliente 
+	//mientras el bucle poll() todavía pueda acceder a él, sino que lo
+	//marcaremos (flag) como pendiente de eliminacion y al salir del bucle
+	// se eliminara de forma segura.
 	while (Server::_signalFlag == false)
 	{
 		if ((poll(&_fds[0], _fds.size(), -1) == -1) && Server::_signalFlag == false)
@@ -82,12 +83,12 @@ void Server::serverInit(int port, std::string& pwd)
 			else
 				receiveNewData(_fds[i].fd);
 		}
-		// Limpia clientes marcados para borrado
+		// Limpia clientes marcados para borrado (al reves, por seguridad)
 		for (int i = static_cast<int>(_clients.size()) - 1; i >= 0; --i) {
 			if (_clients[i].isMarkedForRemoval()) {
 				int fd = _clients[i].getFd();
 
-				// Buscarlo y eliminarlo de _fds
+				// Lo busca y lo elimina de _fds
 				for (size_t j = 0; j < _fds.size(); ++j) {
 					if (_fds[j].fd == fd) {
 						_fds.erase(_fds.begin() + j);
@@ -95,7 +96,7 @@ void Server::serverInit(int port, std::string& pwd)
 					}
 				}
 
-				// Eliminarlo de todos los canales
+				// Lo elimina de todos los canales
 				for (size_t c = 0; c < _channels.size();  ) { // <--incremento manual
 					_channels[c].removeClient(fd); //solo borra si lo encuentra
 
@@ -107,7 +108,7 @@ void Server::serverInit(int port, std::string& pwd)
 					++c;
 				}
 
-				//Eliminarlo de _clients
+				//Lo elimina de _clients
 				_clients.erase(_clients.begin() + i);
 			}
 		}
@@ -144,8 +145,8 @@ void Server::closeFds()
         int cfd = _clients[i].getFd();
         if (cfd >= 0) {
             std::cout << YELLOW_PALE << "<" << cfd << "> Disconnected" << RESET << std::endl;
-            shutdown(cfd, SHUT_RDWR); // aviso y cierre de socket, forma mas limpia
-            close(cfd); //libera el fd
+            shutdown(cfd, SHUT_RDWR); // avisa del cierre del socket, forma mas limpia
+            close(cfd); //cierra y libera el fd
         }
     }
 
@@ -158,14 +159,14 @@ void Server::closeFds()
     }
 
     // Trick para limpiar estructuras (C++98)
-	//Creamos un vector temporal vacío de tipo Client. 
+	//Creamos un vector temporal vacio de tipo Client. 
 	//Con swap() intercambiamos el contenido del vector temporal
-	// vacío con _clients. Ahora _clients está vacío. El vector 
+	// vacio con _clients. Ahora _clients esta vacio. El vector 
 	//temporal (que contiene los datos antiguos) se destruye al 
-	//salir de la expresión → liberando su memoria.
+	//salir de la expresion → liberando su memoria.
 	//No es necesario recorrer los vectores para “cerrar” nada 
-	//porque los no tienen sockets propios. Sólo contienen sets,
-	//bools, int y strings, que se liberan automáticamente al 
+	//porque los no tienen sockets propios. Solo contienen sets,
+	//bools, int y strings, que se liberan automaticamente al 
 	//destruirse los objetos.
     std::vector<Client>().swap(_clients);
     std::vector<struct pollfd>().swap(_fds);
@@ -182,10 +183,11 @@ void Server::acceptNewClient()
     socklen_t len = sizeof(cliAdd);
     int newFd = accept(_serverFd, (sockaddr *)&cliAdd, &len);
     if (newFd == -1) { // si accept da -1 => no hay nada ahora, pues salgo de la funcion
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return; 
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			return; 
+		}
 		std::perror("(!) ERROR:  accept()");
         return; // no continua con fd invalido
-//		throw std::runtime_error("(!) ERROR:  accept()"); ??? NO SE SI LANZAR EL PERROR O LA EXCEPTION
     }
 
     if (fcntl(newFd, F_SETFL, O_NONBLOCK) == -1) {
@@ -243,7 +245,7 @@ void Server::receiveNewData(int fd)
     std::string& buffer = cli->getBuffer();
     size_t pos;
 	
-    // Procesar solo cuando haya una línea completa
+    // Procesar solo cuando haya una linea completa
     while ((pos = buffer.find("\r\n")) != std::string::npos)
     {
 		std::string command = buffer.substr(0, pos);  // comando completo
@@ -259,7 +261,7 @@ void Server::receiveNewData(int fd)
 
 void Server::sendToClient(Client& client, const std::string& message)
 {
-    if (client.isMarkedForRemoval()) return; // Si el cliente se ha de eliminar, No enviarle nada
+    if (client.isMarkedForRemoval()) return; // Si el cliente se ha de eliminar, no enviarle nada
 
     int fd = client.getFd();
     const char* buffer = message.c_str();
@@ -270,17 +272,16 @@ void Server::sendToClient(Client& client, const std::string& message)
     {
         ssize_t sent = send(fd, buffer + totalSent, length - totalSent, 0);
         if (sent <= 0) {
-            if (errno == EWOULDBLOCK || errno == EAGAIN) break; // El socket no está listo → esperar y reintentar
+            if (errno == EWOULDBLOCK || errno == EAGAIN) break; // El socket no esta listo → esperar y reintentar
 			clearClient(fd);
             return;
         }
         totalSent += sent;
     }
-	// Muestra mensaje en consif (cli->getStatus() != AUTHENTICATED)ola sin \r\n
-    std::cout << "<" << fd << "> " << GREEN << ">> " 
+	// Muestra mensaje en consola sin el '\r\n' 
+	std::cout << "<" << fd << "> " << GREEN << ">> " 
               << RESET << Utils::stripCRLF(message) << std::endl;
 }
-
 
 
 
@@ -289,13 +290,13 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	if (cmd.empty())
 		return ;
 
-	if (cli->getStatus() != AUTHENTICATED) // || cli->getStatus() != NICK_AGAIN) //Si fallo el 1er Nick, maneja 2nd y 3rd
+	if (cli->getStatus() != AUTHENTICATED)
 	{
 		handshake(cli, cmd);
 		return;
 	}
 
-	// Separar en tokens por espacio
+	// Separa en tokens por espacio
 	std::vector<std::string> tokens = Utils::split(cmd, ' ');
 	if (tokens.empty())
 		return ;
@@ -304,16 +305,15 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 
 	for (size_t i = 0; i < command.size(); ++i) {
 		command[i] = std::toupper(command[i]);
-		//command[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(command[i])));//uppercase seguro
 	}
 
 	if (command == "CAP" || command == "CAP END") { // ignora estos comandos si vuelven de nuevo
 		return ;
 	}
-	else if (command == "PASS") { // No se debe poder cambiar
+	else if (command == "PASS") { // No se permite cambio de PASS
 		handlePass(cli, tokens);
 	}
-	else if (command == "NICK") { // permitir cambio de nick
+	else if (command == "NICK") { // Permite cambio de NICK
 		handleNick(cli, tokens);
 	}
 	else if (command == "USER") {
@@ -323,7 +323,7 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	{
 		handleJoin(cli, tokens);
 	}
-	else if (command == "WHO") { //Refresca datos de lista del canal
+	else if (command == "WHO") { //Envia la lista de clientes del canal
 		handleWho(cli, tokens);
 	}
 	else if (command == "PRIVMSG") {
@@ -341,18 +341,17 @@ void Server::parseCommand(Client* cli, const std::string& cmd)
 	else if (command == "INVITE") {
 		handleInvite(cli, tokens);
 	}
-	else if (command == "QUIT") { //gestionaremos una eliminacion y borrado limpios del cliente
-	 	clearClient(cli->getFd()); // cierra socket,lo marca para eliminarlo de _fds, _clients, _channels y lo informa en consola 
+	else if (command == "QUIT") { //Maneja una eliminacion y borrado limpio del cliente
+	 	clearClient(cli->getFd()); //cierra socket, lo elimina de _fds, _clients y _channels y lo informa en consola 
 	}
 	else {
 		std::cout << "Ignored command by ircserv: " << cmd << std::endl;
-		//Aqui llegaran los comandos que maneja HexChat y 
-		//nosotros no hemos contemplado por que subject no lo requiere
+		//Aqui llegaran los comandos no implementados por subject
 	}
 }
 
 
-// HANDSHAKE: autentica al cliente
+// Proceso de autenticacion del cliente
 void Server::handshake(Client *cli, const std::string &cmd)
 {
 	std::vector<std::string> tokens = Utils::split(cmd, ' ');
@@ -400,7 +399,7 @@ void Server::handshake(Client *cli, const std::string &cmd)
 											+ " :Welcome to the IRC server " 
 											+ cli->getNickname() + "!\r\n");
 
-//		sendWelcomeMessages(*cli); //Desreferencio el puntero cli para pasarlo como referencia
+
 	}
 }
 
@@ -653,7 +652,6 @@ Channel* Server::getChannelByName(const std::string &name)
     return NULL;
 }
 //Periodicamente HexChat lanza un WHO para actualizar lista de clientes del canal
-//Se puede configurar HexChat para que NO lo lance y muestre solo los que habia al entrar
 void Server::handleWho(Client *cli, const std::vector<std::string> &tokens)
 {
     if (tokens.size() < 2)
@@ -888,7 +886,7 @@ void Server::handleTopic(Client *cli, const std::vector<std::string>& tokens)
         return ;
     }
 
-    // Caso 1: Solo consultar topic
+    // Solo consultar topic
     if (tokens.size() == 2)
     {
         if (chan->hasTopic())
@@ -897,7 +895,7 @@ void Server::handleTopic(Client *cli, const std::vector<std::string>& tokens)
             sendToClient(*cli, ":ircserv 331 " + cli->getNickname() + " " + channelName + " :No topic is set\r\n");
         return ;
     }
-    // Caso 2: Cambiar topic (Si modo +t está activo, solo operadores pueden)
+    // Cambiar topic (Si modo +t esta activo, solo operadores pueden)
     if (chan->isModeT() && !chan->isOperator(cli->getFd()))
     {
         sendToClient(*cli, ":ircserv 482 " + cli->getNickname() + " " + channelName + " :You're not channel operator\r\n");
@@ -974,7 +972,7 @@ void Server::handleMode(Client* cli, const std::vector<std::string>& tokens)
         return ;
     }
 
-// Caso 1: consulta modos
+	// Caso 1: consulta modos
     if (tokens.size() == 2) {
         showChannelModes(cli, chan, target);
         return;

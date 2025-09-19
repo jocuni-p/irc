@@ -36,7 +36,6 @@ private:
     std::vector<struct pollfd>	_fds;
     std::vector<Channel>        _channels;
 
-	
     // Helpers / parser
     Client* 					getClient(int fd);
     Client* 					getClientByNick(const std::string& nick);
@@ -46,7 +45,7 @@ private:
 	void 						parseCommand(Client *cli, const std::string &cmd);
 	void 						handshake(Client *cli, const std::string &cmd);
 
-    // Handlers de comandos
+    // Handlers de COMMANDS
 	void 						handleCap(Client *cli);
     void 						handlePass(Client* cli, const std::vector<std::string>& tokens);
     void 						handleNick(Client* cli, const std::vector<std::string>& tokens);
@@ -60,7 +59,6 @@ private:
     void 						handleInvite(Client* cli, const std::vector<std::string>& tokens);
 
     void 						sendToClient(Client& client, const std::string& message);
-//    void 						sendWelcomeMessages(Client& client);
     
     bool 						checkOperator(Client *cli, Channel *chan, const std::string& target);
     void 						showChannelModes(Client *cli, Channel *chan, const std::string& target);
