@@ -45,12 +45,14 @@ private:
 	void 						parseCommand(Client *cli, const std::string &cmd);
 	void 						handshake(Client *cli, const std::string &cmd);
 
-    // Handlers de COMMANDS
+    // AUTHENTICATION COMMANDS
 	void 						handleCap(Client *cli);
     void 						handlePass(Client* cli, const std::vector<std::string>& tokens);
     void 						handleNick(Client* cli, const std::vector<std::string>& tokens);
     void 						handleUser(Client* cli, const std::vector<std::string>& tokens);
-    void 						handleJoin(Client* cli, const std::vector<std::string>& tokens);
+    
+	// COMMANDS
+	void 						handleJoin(Client* cli, const std::vector<std::string>& tokens);
 	void 						handleWho(Client *cli, const std::vector<std::string> &tokens);
 	void 						handlePrivmsg(Client *cli, const std::vector<std::string> &tokens);
 	void 						handleTopic(Client* cli, const std::vector<std::string>& tokens);

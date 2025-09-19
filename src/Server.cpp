@@ -65,9 +65,9 @@ void Server::serverInit(int port, std::string& pwd)
 	std::cout << "Listening on port <" << this->_port << ">\n" << std::endl;
 
 	//NOTA: para evitar malfuncionamiento no borraremos ningun cliente 
-	//mientras el bucle poll() todavía pueda acceder a él, sino que lo
-	//marcaremos (flag) como pendiente de eliminacion y al salir del bucle
-	// se eliminara de forma segura.
+	//mientras el bucle for despues del poll() todavía pueda acceder a él,
+	// sino que lo marcaremos como pendiente de eliminacion y al salir del
+	// for se eliminara de forma segura.
 	while (Server::_signalFlag == false)
 	{
 		if ((poll(&_fds[0], _fds.size(), -1) == -1) && Server::_signalFlag == false)
@@ -79,9 +79,9 @@ void Server::serverInit(int port, std::string& pwd)
 				continue;
 			
 			if (_fds[i].fd == _serverFd)
-				acceptNewClient();
+				acceptNewClient(); // conecta y autentica a un nuevo cliente
 			else
-				receiveNewData(_fds[i].fd);
+				receiveNewData(_fds[i].fd); // procesa el comando que recive de un cliente autenticado
 		}
 		// Limpia clientes marcados para borrado (al reves, por seguridad)
 		for (int i = static_cast<int>(_clients.size()) - 1; i >= 0; --i) {
