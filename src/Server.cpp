@@ -1,6 +1,8 @@
 #include "Server.hpp"
 
+//THIS FILE IS THE PROGRAM CORE.
 
+// To monitor the status towards process interruptions like Ctrl+C
 bool Server::_signalFlag = false;
 
 //We use this as a flag to stop the process in a clean way
@@ -31,7 +33,7 @@ void Server::createSocket()
 	if (_serverFd == -1)
 		throw(std::runtime_error("faild to create socket"));
 
-	// CONF LIBERACION RAPIDA DEL PUERTO
+	// CONFIG LIBERACION RAPIDA DEL PUERTO
 	if (setsockopt(_serverFd, SOL_SOCKET, SO_REUSEADDR, &en, sizeof(en)) == -1)
 		throw(std::runtime_error("faild to set option (SO_REUSEADDR) on socket"));
 

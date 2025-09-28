@@ -2,10 +2,12 @@
 #define UTILS_HPP
 
 
-#include <vector>      // Para std::vector<>
-#include <string>      // Para std::string
-#include <sstream>     // Para std::stringstream
-#include <iostream>    // Para std::getline (opcional, pero recomendado)
+#include <vector>
+#include <string>
+#include <sstream>
+#include <iostream>
+#include "Server.hpp"
+
 
 
 #define RESET   "\033[0m"
@@ -23,7 +25,7 @@ class Utils {
 	public:
 		static bool isValidPortArg(int const& port);
 		static bool isValidPasswordArg(const std::string& password);
-		static std::vector<std::string> split(const std::string &str, char delim);
+		static std::vector<std::string> split(const std::string& str, char delim);
 		static std::string stripCRLF(const std::string &msg);
 		static std::string joinFrom(const std::vector<std::string> &v, size_t start, const std::string &sep = " ");
 };

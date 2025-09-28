@@ -1,5 +1,6 @@
 #include "Server.hpp"
 
+//THIS FILE MANAGES Entrada/salida del socket, aceptar clientes y leer datos.
 
 void Server::acceptNewClient()
 {
@@ -101,4 +102,28 @@ void Server::sendToClient(Client& client, const std::string& message)
               << RESET << Utils::stripCRLF(message) << std::endl;
 }
 
+
+Client* Server::getClientByNick(const std::string& nick)
+{
+    for (size_t i = 0; i < _clients.size(); ++i)
+    {
+        if (_clients[i].getNickname() == nick)
+        {
+            return &_clients[i];
+        }
+    }
+    return NULL; // no encontrado
+}
+
+
+
+Client *Server::getClient(int fd)
+{
+	for (size_t i = 0; i < _clients.size(); i++)
+    {
+		if (_clients[i].getFd() == fd)
+			return &_clients[i];
+	}
+	return NULL;
+}
 

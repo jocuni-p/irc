@@ -1,6 +1,6 @@
 #include "Server.hpp"
 
-
+//THIS FILE HANDLES THE IRC COMMANDS
 
 void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
 {
@@ -90,7 +90,6 @@ void Server::handleJoin(Client* cli, const std::vector<std::string>& tokens)
     sendToClient(*cli, ":ircserv 366 " + cli->getNickname() + " " + channelName +
                           " :End of NAMES list\r\n");
 }
-
 
 
 //Periodicamente HexChat lanza un WHO para actualizar lista de clientes del canal
@@ -237,11 +236,6 @@ void Server::handlePrivmsg(Client *cli, const std::vector<std::string>& tokens)
         }
     }
 }
-
-
-
-
-
 
 
 void Server::handleTopic(Client *cli, const std::vector<std::string>& tokens)

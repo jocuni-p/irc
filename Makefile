@@ -16,6 +16,10 @@ SRCS = $(SRC_DIR)/main.cpp \
        $(SRC_DIR)/Server.cpp \
        $(SRC_DIR)/Client.cpp \
        $(SRC_DIR)/Channel.cpp \
+	   $(SRC_DIR)/ServerAuth.cpp \
+	   $(SRC_DIR)/ServerCommands.cpp \
+	   $(SRC_DIR)/ServerHelpers.cpp \
+	   $(SRC_DIR)/ServerIO.cpp \
 	   $(SRC_DIR)/Utils.cpp \
 	   $(SRC_DIR)/debug.cpp
 

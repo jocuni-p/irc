@@ -1,5 +1,6 @@
 #include "Server.hpp"
 
+//THIS FILE MANAGES HANDSHAKE/AUTHENTICATION
 
 // Proceso de autenticacion del cliente
 void Server::handshake(Client *cli, const std::string &cmd)
@@ -54,8 +55,6 @@ void Server::handshake(Client *cli, const std::string &cmd)
 }
 
 
-
-
 //RESPUESTA SOBRE LA LISTA DE CAPACIDADES QUE SOPORTA EL SERVER
 void Server::handleCap(Client *cli)
 {
@@ -69,8 +68,6 @@ void Server::handleCap(Client *cli)
 	sendToClient(*cli, reply.str());
 	cli->setStatus(CAP_NEGOTIATED);
 }
-
-
 
 
 void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
@@ -109,8 +106,6 @@ void Server::handlePass(Client* cli, const std::vector<std::string>& tokens)
 
 	cli->setStatus(PASS_OK);
 }
-
-
 
 
 void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
@@ -156,7 +151,6 @@ void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
 			return ;
 		}
 	}
-
 	cli->setNickname(newNick);
 	sendToClient(*cli, ":* NICK " + newNick + "\r\n");
 
@@ -166,8 +160,6 @@ void Server::handleNick(Client* cli, const std::vector<std::string>& tokens)
 		cli->setStatus(NICK_OK);
 	}
 }
-
-
 
 
 void Server::handleUser(Client* cli, const std::vector<std::string>& tokens)
