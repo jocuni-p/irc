@@ -127,15 +127,6 @@ El Makefile incluye las reglas estándar:
 ```
 
 
-En la terminal donde se ejecuta se pueden ver todos los mensajes entre servidor y cliente (precedidos por su número de socket). Los mensajes en amarillo son únicamente informativos. 
-
-
-
-![ircserv](https://github.com/user-attachments/assets/7e8fafc3-dc2f-4665-bafc-433036627b86)
-
-
-
-
 ## Comandos Implementados
 
 ### Autenticación y Registro
@@ -222,6 +213,15 @@ Vista de configuración de un cliente en HexChat.
 Vista de dos clientes Hexchat (Ronald y Jon) interactuando entre ellos dentro del canal 1.
 
 <img width="589" height="513" alt="hexchat_2" src="https://github.com/user-attachments/assets/524f3fd0-3e4f-420a-9cf4-7cfe001b0e9f" />
+
+
+En la terminal donde se ejecuta se pueden ver todos los mensajes entre servidor y cliente (precedidos por su número de socket). Los mensajes en amarillo son únicamente informativos. 
+
+![ircserv](https://github.com/user-attachments/assets/7e8fafc3-dc2f-4665-bafc-433036627b86)
+
+
+
+
 
 
 ### Con netcat (Testing básico)
