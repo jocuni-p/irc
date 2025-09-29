@@ -67,6 +67,9 @@ fcntl(new_socket, F_SETFL, O_NONBLOCK);
 - Sincronización de estado en canales
 - Manejo de desconexiones inesperadas
 
+<img width="1746" height="1511" alt="Screenshot from 2025-08-15 10-35-21" src="https://github.com/user-attachments/assets/f050aaf3-0d7d-4e4e-b794-d05372256ea7" />
+
+
 #### Por qué es importante:
 - **Fundamento de Internet**: HTTP, SSH, FTP, y todos los protocolos web usan sockets
 - **Aplicaciones Distribuidas**: Sistemas modernos como microservicios dependen de la comunicación entre procesos
