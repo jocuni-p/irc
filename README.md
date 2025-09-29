@@ -38,6 +38,7 @@ Los sockets son endpoints de comunicación que permiten que procesos diferentes 
 **1. Comunicación Cliente-Servidor**
 ```cpp
 // Servidor - Creación y configuración
+
 int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 bind(server_fd, (struct sockaddr*)&address, sizeof(address));
 listen(server_fd, BACKLOG);
@@ -56,6 +57,7 @@ listen(server_fd, BACKLOG);
 **4. Gestión de Conexiones de Red**
 ```cpp
 // Aceptar nuevas conexiones
+
 int new_socket = accept(server_fd, (struct sockaddr*)&address, &addrlen);
 fcntl(new_socket, F_SETFL, O_NONBLOCK);
 ```
@@ -89,12 +91,12 @@ Este proyecto no solo te enseña a implementar un chat, sino los **cimientos de 
 ### Prerrequisitos
 - Compilador C++ (g++/clang++)
 - Make
-- Cliente IRC (orientado a clientes HexChat o netcat para testing)
+- Cliente IRC (HexChat y netcat para testing)
 
 ### Compilación
 ```bash
-git clone https://github.com/jocuni-p/irc.git
-cd irc
+git clone https://github.com/jocuni-p/ft_irc.git
+cd ft_irc
 make
 ```
 
@@ -120,6 +122,16 @@ El Makefile incluye las reglas estándar:
 ```bash
 ./ircserv 6667 mysecretpassword
 ```
+
+
+En la terminal donde se ejecuta se pueden ver todos los mensajes entre servidor y cliente (precedidos por su número de socket). Los mensajes en amarillo son únicamente informativos. 
+
+
+
+![ircserv](https://github.com/user-attachments/assets/7e8fafc3-dc2f-4665-bafc-433036627b86)
+
+
+
 
 ## Comandos Implementados
 
@@ -189,6 +201,7 @@ El Makefile incluye las reglas estándar:
 ## Testing
 
 ### Con HexChat (Recomendado)
+
 1. Abre HexChat
 2. En "Network List", añade un nuevo servidor:
    - **Name**: `ft_irc Local`
@@ -198,6 +211,15 @@ El Makefile incluye las reglas estándar:
    PASS tu_contraseña
    ```
 4. Conecta y usa los comandos IRC normalmente
+
+Vista de configuración de un cliente en HexChat.
+
+![hexchat1](https://github.com/user-attachments/assets/f68bcd30-507f-4728-ba8c-680d3979ab06)
+
+Vista de dos clientes Hexchat (Ronald y Jon) interactuando entre ellos dentro del canal 1.
+
+<img width="589" height="513" alt="hexchat_2" src="https://github.com/user-attachments/assets/524f3fd0-3e4f-420a-9cf4-7cfe001b0e9f" />
+
 
 ### Con netcat (Testing básico)
 ```bash
@@ -210,7 +232,7 @@ echo -e "CAP LS\r\nPASS mypassword\r\nNICK testuser\r\nUSER user 0 * :Real Name\
 
 ### Flujo de autenticación típico
 ```irc
-CAP LS
+CAP LS 302
 PASS serverpassword
 NICK mynickname  
 USER myusername 0 * :My Real Name
