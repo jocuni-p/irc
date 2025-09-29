@@ -240,6 +240,11 @@ JOIN #channel
 PRIVMSG #channel :Hello world!
 ```
 
+
+![netcat_ircserv](https://github.com/user-attachments/assets/b935bd3b-1a8b-464d-8b54-fc19e0df161b)
+
+
+
 ## Protocolo
 
 La implementación sigue el estándar moderno de IRC documentado en:
