@@ -2,7 +2,9 @@
 # ft_irc - Internet Relay Chat Server
 
 ![C++](https://img.shields.io/badge/C++-98-blue)
-![42](https://img.shields.io/badge/42-Barcelona-00babc)
+![42](https://img.shields.io/badge/42-Barcelona-00babc) 
+
+Autores: [smaxpereyra](https://github.com/smaxpereyra), [jocuni-p](https://github.com/jocuni-p)
 
 
 ## ¿Qué es IRC?
